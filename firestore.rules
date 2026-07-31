@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // `credits` / `creditsTotal` are intentionally excluded from what the
+      // client can write — they're only ever changed server-side, via the
+      // Admin SDK in functions/index.js (ensureAccount, claudeProxy's spend/
+      // refund, and the Stripe webhook), which bypasses these rules entirely.
+      // Without this, any signed-in user could open devtools and grant
+      // themselves unlimited free credits with a plain Firestore write.
+      allow create: if request.auth != null && request.auth.uid == uid
+        && !request.resource.data.keys().hasAny(['credits', 'creditsTotal']);
+      allow update: if request.auth != null && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['credits', 'creditsTotal']);
+
+      match /resumes/{resumeId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      match /contacts/{contactId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      // Populated only by the Stripe webhook (Admin SDK). Client can read
+      // its own history to display it, never write or fake an entry.
+      match /billingHistory/{sessionId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+  }
+}
