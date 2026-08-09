@@ -1,0 +1,330 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ResumeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DomainStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum AgentRunStatus {
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+enum AgentRunStep {
+  SETUP
+  INTELLIGENCE
+  STRATEGY
+  BUILD
+  REVIEW
+  EXPORT
+}
+
+enum EvidenceStrength {
+  STRONG
+  WEAK
+  MISSING
+}
+
+enum ChangeStatus {
+  PENDING
+  ACCEPTED
+  REVERTED
+}
+
+enum QualityFlagStatus {
+  NEEDS_REVIEW
+  VERIFIED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  fullName     String
+  email        String   @unique
+  phone        String?
+  location     String?
+  linkedinUrl  String?
+  role         Role     @default(USER)
+  credits      Int      @default(100)
+  creditsMax   Int      @default(500)
+  planId       String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  careerProfiles  CareerProfile[]
+  jobDescriptions JobDescription[]
+  resumes         Resume[]
+  agentRuns       AgentRun[]
+  refreshTokens   RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model CareerProfile {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  experience Experience[]
+  education  Education[]
+  skills     ProfileSkill[]
+  agentRuns  AgentRun[]
+  resumes    Resume[]
+
+  @@index([userId])
+}
+
+model Experience {
+  id              String        @id @default(cuid())
+  careerProfileId String
+  careerProfile   CareerProfile @relation(fields: [careerProfileId], references: [id], onDelete: Cascade)
+  title           String
+  company         String
+  location        String?
+  startDate       String // "YYYY-MM"
+  endDate         String? // "YYYY-MM" | null = Present
+  sortOrder       Int           @default(0)
+
+  @@index([careerProfileId])
+}
+
+model Education {
+  id              String        @id @default(cuid())
+  careerProfileId String
+  careerProfile   CareerProfile @relation(fields: [careerProfileId], references: [id], onDelete: Cascade)
+  school          String
+  degree          String
+  fieldOfStudy    String?
+  startDate       String
+  endDate         String?
+  sortOrder       Int           @default(0)
+
+  @@index([careerProfileId])
+}
+
+model ProfileSkill {
+  id              String        @id @default(cuid())
+  careerProfileId String
+  careerProfile   CareerProfile @relation(fields: [careerProfileId], references: [id], onDelete: Cascade)
+  label           String
+
+  @@index([careerProfileId])
+}
+
+// ===== ADMIN-OWNED — hidden from all user-role API responses =====
+
+model Domain {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  // summary is the ONLY field ever returned to user-role requests
+  summary     String
+  status      DomainStatus @default(DRAFT)
+  createdById String // admin userId
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  categories DomainCategory[]
+  agentRuns  AgentRun[]
+  resumes    Resume[]
+}
+
+model DomainCategory {
+  id        String @id @default(cuid())
+  domainId  String
+  domain    Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int    @default(0)
+
+  skills       DomainSkill[]
+  strongPoints DomainStrongPoint[]
+
+  @@index([domainId])
+}
+
+model DomainSkill {
+  id               String         @id @default(cuid())
+  domainCategoryId String
+  domainCategory   DomainCategory @relation(fields: [domainCategoryId], references: [id], onDelete: Cascade)
+  label            String
+  weight           Int            @default(3) // 1-5
+
+  @@index([domainCategoryId])
+}
+
+model DomainStrongPoint {
+  id               String         @id @default(cuid())
+  domainCategoryId String
+  domainCategory   DomainCategory @relation(fields: [domainCategoryId], references: [id], onDelete: Cascade)
+  text             String
+  sortOrder        Int            @default(0)
+
+  @@index([domainCategoryId])
+}
+
+// ===== JOB DESCRIPTION =====
+
+model JobDescription {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  rawText           String
+  company           String?
+  title             String?
+  seniority         String?
+  roleFamily        String?
+  parsedDomainGuess String?
+  createdAt         DateTime @default(now())
+
+  requirements JDRequirement[]
+  agentRuns    AgentRun[]
+  resumes      Resume[]
+
+  @@index([userId])
+}
+
+model JDRequirement {
+  id               String         @id @default(cuid())
+  jobDescriptionId String
+  jobDescription   JobDescription @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  name             String
+  importance       String // "Critical" | "High" | "Medium" | "Low"
+  mentionCount     Int    @default(1)
+
+  matches ResumeRequirementMatch[]
+
+  @@index([jobDescriptionId])
+}
+
+// ===== RESUME =====
+
+model Resume {
+  id               String       @id @default(cuid())
+  userId           String
+  user             User         @relation(fields: [userId], references: [id])
+  careerProfileId  String
+  careerProfile    CareerProfile @relation(fields: [careerProfileId], references: [id])
+  domainId         String
+  domain           Domain       @relation(fields: [domainId], references: [id])
+  jobDescriptionId String?
+  jobDescription   JobDescription? @relation(fields: [jobDescriptionId], references: [id])
+  title            String
+  status           ResumeStatus @default(ACTIVE)
+  currentVersionId String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  versions ResumeVersion[]
+
+  @@index([userId])
+}
+
+model ResumeVersion {
+  id            String   @id @default(cuid())
+  resumeId      String
+  resume        Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  label         String
+  content       Json // structured resume content (ResumeContent shape)
+  matchScore    Int?
+  scoreBreakdown Json? // ScoreBreakdown shape
+  createdAt     DateTime @default(now())
+
+  changes ResumeChange[]
+  matches ResumeRequirementMatch[]
+  flags   QualityFlag[]
+
+  @@index([resumeId])
+}
+
+model ResumeChange {
+  id              String        @id @default(cuid())
+  resumeVersionId String
+  resumeVersion   ResumeVersion @relation(fields: [resumeVersionId], references: [id], onDelete: Cascade)
+  section         String
+  beforeText      String
+  afterText       String
+  rationale       String
+  status          ChangeStatus  @default(PENDING)
+
+  @@index([resumeVersionId])
+}
+
+model ResumeRequirementMatch {
+  id              String           @id @default(cuid())
+  resumeVersionId String
+  resumeVersion   ResumeVersion    @relation(fields: [resumeVersionId], references: [id], onDelete: Cascade)
+  jdRequirementId String
+  jdRequirement   JDRequirement    @relation(fields: [jdRequirementId], references: [id])
+  evidenceStrength EvidenceStrength
+  resumeLocations Json // string[]
+
+  @@index([resumeVersionId])
+}
+
+model QualityFlag {
+  id              String            @id @default(cuid())
+  resumeVersionId String
+  resumeVersion   ResumeVersion     @relation(fields: [resumeVersionId], references: [id], onDelete: Cascade)
+  claimText       String
+  sourceRef       String?
+  status          QualityFlagStatus @default(NEEDS_REVIEW)
+
+  @@index([resumeVersionId])
+}
+
+// ===== AGENT RUN =====
+
+model AgentRun {
+  id               String         @id @default(cuid())
+  userId           String
+  user             User           @relation(fields: [userId], references: [id])
+  careerProfileId  String
+  careerProfile    CareerProfile  @relation(fields: [careerProfileId], references: [id])
+  domainId         String
+  domain           Domain         @relation(fields: [domainId], references: [id])
+  jobDescriptionId String
+  jobDescription   JobDescription @relation(fields: [jobDescriptionId], references: [id])
+  resumeId         String?
+  currentStep      AgentRunStep   @default(SETUP)
+  status           AgentRunStatus @default(IN_PROGRESS)
+  strategySnapshot Json?
+  buildLog         Json?          // Array<{ timestamp: string, text: string }>
+  startedAt        DateTime       @default(now())
+  completedAt      DateTime?
+
+  @@index([userId])
+}
