@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // `credits` / `creditsTotal` / `role` are intentionally excluded from
+      // what the client can write — they're only ever changed server-side,
+      // via the Admin SDK in functions/index.js (ensureAccount, claudeProxy's
+      // spend/refund, and the Stripe webhook), which bypasses these rules
+      // entirely. Without this, any signed-in user could open devtools and
+      // grant themselves unlimited free credits — or, for `role`, just a
+      // cosmetic admin badge, since every actual admin-only Cloud Function
+      // re-verifies the caller's email server-side and never trusts this
+      // field, but there's no reason to leave it writable either.
+      allow create: if request.auth != null && request.auth.uid == uid
+        && !request.resource.data.keys().hasAny(['credits', 'creditsTotal', 'role']);
+      allow update: if request.auth != null && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['credits', 'creditsTotal', 'role']);
+
+      match /resumes/{resumeId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      match /contacts/{contactId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      // Populated only by the Stripe webhook (Admin SDK). Client can read
+      // its own history to display it, never write or fake an entry.
+      match /billingHistory/{sessionId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+      // Career profile — structured experience/education/skills ground truth
+      match /careerProfile/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      // Job descriptions parsed by the agent
+      match /jobDescriptions/{jdId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      // Agent runs (wizard state)
+      match /agentRuns/{runId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      // Immutable versioned resumes produced by the agent
+      match /resumeVersions/{versionId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+    // Domains — published name+summary readable by any signed-in user;
+    // write access gated entirely through the agentProxy Cloud Function (Admin SDK).
+    match /domains/{domainId} {
+      allow read: if request.auth != null;
+      allow write: if false; // all writes go through agentProxy (Admin SDK)
+    }
+  }
+}
