@@ -138,6 +138,8 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
   const [profileId, setProfileId] = useState('');
   const [domains, setDomains] = useState([]);
   const [selectedDomainId, setSelectedDomainId] = useState('');
+  const [profileSwitcherOpen, setProfileSwitcherOpen] = useState(false);
+  const [domainSwitcherOpen, setDomainSwitcherOpen] = useState(false);
 
   // Setup state — existing mode
   const [baseResumeId, setBaseResumeId] = useState('');
@@ -453,31 +455,69 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
             <>
               <div className="panel" style={{ marginBottom: 14 }}>
                 <div className="panel-head"><h2>Career profile</h2></div>
-                {profiles.map(p => (
-                  <div key={p.id} className={`radio-card${profileId === p.id ? ' selected' : ''}`} onClick={() => setProfileId(p.id)}>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                      <div className="radio-dot" />
-                      <div>
-                        <div className="rc-name">{p.name}{p.isDefault && <span className="badge badge-gray" style={{ marginLeft: 6 }}>Default</span>}</div>
-                        <div className="rc-meta">{p.experience?.length || 0} experience entries · {p.skills?.length || 0} skills</div>
+                {profiles.length === 0 ? <div className="empty">No career profiles found.</div> : (
+                  <div className="profile-switcher" style={{ position: 'relative' }}>
+                    <button className="profile-switcher-btn" onClick={() => setProfileSwitcherOpen(v => !v)}>
+                      <div className="profile-avatar">{(profile?.name || 'P').charAt(0).toUpperCase()}</div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div className="profile-switcher-name">
+                          {profile?.name || '— Choose a profile —'}
+                          {profile?.isDefault && <span className="badge badge-violet" style={{ marginLeft: 8 }}>Default</span>}
+                        </div>
+                        {profile && <div className="profile-switcher-meta">{profile.experience?.length || 0} experience · {profile.skills?.length || 0} skills</div>}
                       </div>
-                    </div>
+                      <span className="profile-switcher-chevron">{profileSwitcherOpen ? '▾' : '▸'}</span>
+                    </button>
+                    {profileSwitcherOpen && (
+                      <div className="profile-switcher-menu">
+                        {profiles.map(p => (
+                          <div key={p.id} className={`profile-switcher-item${profileId === p.id ? ' active' : ''}`}
+                            onClick={() => { setProfileId(p.id); setProfileSwitcherOpen(false); }}>
+                            <div className="profile-avatar" style={{ width: 28, height: 28, fontSize: 12, borderRadius: 7 }}>{p.name.charAt(0).toUpperCase()}</div>
+                            <div>
+                              <div className="profile-switcher-item-name">{p.name}{p.isDefault && <span className="badge badge-violet" style={{ marginLeft: 6 }}>Default</span>}</div>
+                              <div className="profile-switcher-item-meta">{p.experience?.length || 0} experience entries · {p.skills?.length || 0} skills</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
 
               <div className="panel" style={{ marginBottom: 14 }}>
                 <div className="panel-head"><h2>Target domain</h2></div>
-                {domains.length === 0 && <div className="empty">No published domains yet — ask your admin to add one.</div>}
-                <div className="domain-grid">
-                  {domains.map(d => (
-                    <div key={d.id} className={`radio-card domain-card${selectedDomainId === d.id ? ' selected' : ''}`} onClick={() => setSelectedDomainId(d.id)}>
-                      <div className="domain-card-icon">◆</div>
-                      <div className="rc-name">{d.name}</div>
-                      <div className="rc-meta">{d.summary}</div>
-                    </div>
-                  ))}
-                </div>
+                {domains.length === 0 ? (
+                  <div className="empty">No published domains yet — ask your admin to add one.</div>
+                ) : (
+                  <div className="profile-switcher" style={{ position: 'relative' }}>
+                    <button className="profile-switcher-btn" onClick={() => setDomainSwitcherOpen(v => !v)}>
+                      <div className="domain-card-icon" style={{ width: 38, height: 38, borderRadius: 10, fontSize: 15 }}>◆</div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div className="profile-switcher-name">{domains.find(d => d.id === selectedDomainId)?.name || '— Choose a domain —'}</div>
+                        {domains.find(d => d.id === selectedDomainId)?.summary && (
+                          <div className="profile-switcher-meta">{domains.find(d => d.id === selectedDomainId).summary}</div>
+                        )}
+                      </div>
+                      <span className="profile-switcher-chevron">{domainSwitcherOpen ? '▾' : '▸'}</span>
+                    </button>
+                    {domainSwitcherOpen && (
+                      <div className="profile-switcher-menu">
+                        {domains.map(d => (
+                          <div key={d.id} className={`profile-switcher-item${selectedDomainId === d.id ? ' active' : ''}`}
+                            onClick={() => { setSelectedDomainId(d.id); setDomainSwitcherOpen(false); }}>
+                            <div className="domain-card-icon" style={{ width: 28, height: 28, fontSize: 12, borderRadius: 7 }}>◆</div>
+                            <div>
+                              <div className="profile-switcher-item-name">{d.name}</div>
+                              {d.summary && <div className="profile-switcher-item-meta">{d.summary}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <JdInput jdText={jdText} setJdText={setJdText} jdMode={jdMode} setJdMode={setJdMode} imgStatus={imgStatus} setImgStatus={setImgStatus} />

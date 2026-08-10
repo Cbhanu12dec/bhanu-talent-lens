@@ -70,7 +70,6 @@ export default function Sidebar({ view, setView, resumeCount, credits, creditsMa
         <div className="logo-mark" style={{ fontSize: 13 }}>RC</div>
         <div className="logo-text">
           <span className="name">ResumeCraftPro</span>
-          <span className="tag">AI Career Workspace</span>
         </div>
       </div>
 
