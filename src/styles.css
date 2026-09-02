@@ -1,76 +1,84 @@
 /* ============================================================
-   RESUMECRAFTPRO — Design system (from prototype wireframe)
+   RESUMECRAFT PRO — Design System v2 (Olive + Hatch)
+   Supersedes the Sage + Pastel direction.
    ============================================================ */
 :root{
-  /* ---- identity ---- */
-  --ink:        #183B3A;
-  --brand:      #28605D;
-  --brand-hover:#214F4D;
-  --brand-soft: #E7F1EF;
+  /* ---- page / frame ---- */
+  --page-bg:#EEEEF2;
+  --frame:#FFFFFF;
+  --card-border:#ECECEF;
 
-  /* ---- neutrals: ~85% of every screen ---- */
-  --canvas:     #FAFAF8;
-  --surface:    #FFFFFF;
-  --text:       #1E2525;
-  --text-2:     #697270;
-  --text-3:     #9AA19F;
-  --border:     #E4E8E6;
-  --border-strong:#D4DAD7;
+  /* ---- text ---- */
+  --ink:#171816;
+  --ink-2:#6F726C;
+  --ink-3:#A6A8A2;
 
-  /* ---- pastels: decorative only, never a status signal ---- */
-  --mint:     #DDF5E8;
-  --butter:   #FFF1C7;
-  --sky:      #E1F1F7;
-  --lavender: #EEE9FA;
-  --peach:    #FBE7DD;
-  --rose:     #F8E4E6;
+  /* ---- brand: olive ---- */
+  --olive:#54702F;
+  --olive-dark:#3E5322;
+  --olive-soft:#EEF3E4;
+  --olive-pill-bg:#E4EEDA;
 
-  /* ---- status: deliberately separate from the pastel set ---- */
-  --status-ready-bg:#E8F5EE;     --status-ready-text:var(--brand);
-  --status-applied-bg:#E1F1F7;   --status-applied-text:#2A6478;
-  --status-tailoring-bg:#EEF1FA; --status-tailoring-text:#4A4FA0;
-  --status-needs-bg:#FBEAEA;     --status-needs-text:#B14848;
+  /* ---- semantic deltas: only for real comparisons ---- */
+  --pos-bg:#E4F1DC; --pos-text:#3F7A2E;
+  --neg-bg:#FBE4DD; --neg-text:#C0492E;
 
-  --shadow-card:   0 1px 2px rgba(24,59,58,.03);
-  --shadow-pastel: 0 1px 2px rgba(24,59,58,.03), 0 3px 8px rgba(24,59,58,.025);
-  --shadow-hover:  0 8px 24px rgba(24,59,58,.08);
-  --shadow-modal:  0 24px 64px rgba(24,59,58,.14);
+  /* ---- chart / progress neutrals ---- */
+  --track:#EDEDF0;
+  --hatch-grey:#DCDDE0;
 
-  --r-sm:6px; --r-btn:8px; --r-input:10px; --r-card:12px; --r-job:14px; --r-panel:16px; --r-pill:999px;
+  /* The only shadow in the product — see §7. */
+  --shadow-frame:0 1px 2px rgba(20,20,20,.03), 0 20px 50px rgba(20,20,20,.05);
+
+  --r-sm:6px; --r-btn:8px; --r-input:10px; --r-card:14px; --r-bigcard:18px; --r-frame:22px; --r-pill:999px;
 
   /* ---- component-facing names mapped onto the tokens above ---- */
-  --bg:var(--canvas);
-  --surface-sunken:#F5F6F5;
-  --ink-2:var(--text-2);
-  --ink-3:var(--text-3);
-  --sidebar:var(--surface);
-  --sidebar-bg:var(--surface);
-  --sidebar-hover:var(--surface-sunken);
-  --sidebar-text:var(--text-2);
-  --sidebar-text-active:var(--ink);
-  --text-secondary:var(--text-2);
-  --text-muted:var(--text-3);
-  --primary:var(--brand);
-  --primary-hover:var(--brand-hover);
-  --primary-subtle:var(--brand-soft);
-  --brand-dark:var(--brand-hover);
-  --good:var(--status-ready-text);
-  --good-soft:var(--status-ready-bg);
-  --bad:var(--status-needs-text);
-  --bad-soft:var(--status-needs-bg);
+  --canvas:var(--page-bg);
+  --bg:var(--page-bg);
+  --surface:var(--frame);
+  --surface-sunken:#F4F4F6;
+  --text:var(--ink);
+  --text-2:var(--ink-2);
+  --text-3:var(--ink-3);
+  --text-secondary:var(--ink-2);
+  --text-muted:var(--ink-3);
+  --border:var(--card-border);
+  --border-strong:#DEDEE3;
+  --brand:var(--olive);
+  --brand-hover:var(--olive-dark);
+  --brand-soft:var(--olive-soft);
+  --primary:var(--olive);
+  --primary-hover:var(--olive-dark);
+  --primary-subtle:var(--olive-soft);
+  --good:var(--pos-text);
+  --good-soft:var(--pos-bg);
+  --bad:var(--neg-text);
+  --bad-soft:var(--neg-bg);
   --warn:#8A6A1F;
-  --warn-soft:var(--butter);
-  --success:var(--good);
-  --success-subtle:var(--good-soft);
+  --warn-soft:#FBF0D6;
+  --success:var(--pos-text);
+  --success-subtle:var(--pos-bg);
   --warning:var(--warn);
   --warning-subtle:var(--warn-soft);
-  --danger:var(--bad);
-  --danger-subtle:var(--bad-soft);
-  --admin:var(--warn);
-  --admin-subtle:var(--butter);
-  --r-modal:16px;
+  --danger:var(--neg-text);
+  --danger-subtle:var(--neg-bg);
+  --admin:#8A6A1F;
+  --admin-subtle:var(--warn-soft);
+  --sidebar:var(--frame);
+  --sidebar-bg:var(--frame);
+  --sidebar-hover:var(--surface-sunken);
+  --sidebar-text:var(--ink-2);
+  --sidebar-text-active:var(--ink);
+  /* Internal elements never cast shadows; these resolve to none by design. */
+  --shadow-card:none;
+  --shadow-pastel:none;
+  --shadow-hover:none;
+  --shadow-modal:0 24px 64px rgba(20,20,20,.14);
+  --r-job:var(--r-card);
+  --r-panel:var(--r-bigcard);
+  --r-modal:18px;
   --r-md:var(--r-card);
-  --r-lg:var(--r-job);
+  --r-lg:var(--r-bigcard);
   /* legacy aliases kept so existing components don't break */
   --accent:var(--primary);
   --accent-dim:var(--primary-subtle);
@@ -78,6 +86,7 @@
   --primary-end:var(--primary);
   --primary-dim:var(--primary-subtle);
   --violet:var(--primary);
+  --brand-dark:var(--olive-dark);
   --error:var(--danger);
   --error-dim:var(--danger-subtle);
   --warning-dim:var(--warning-subtle);
@@ -86,21 +95,23 @@
   --muted:var(--text-secondary);
   --line:var(--border);
   --line-bright:var(--border-strong);
-  --divider:rgba(24,59,58,.05);
-  --surface-2:var(--canvas);
+  --divider:rgba(20,20,20,.05);
+  --surface-2:var(--surface-sunken);
   --surface-hover:var(--surface-sunken);
-  --sans:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  /* Manrope for numbers/headings, Inter for everything else — §2. */
+  --display:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
   --mono:'JetBrains Mono','IBM Plex Mono',monospace;
   --paper:#FFFFFF;
   --radius-card:var(--r-card);
   --radius-btn:var(--r-btn);
   --radius-input:var(--r-input);
-  --shadow-sm:var(--shadow-card);
-  --shadow-md:var(--shadow-pastel);
-  --shadow-lg:var(--shadow-hover);
+  --shadow-sm:none;
+  --shadow-md:none;
+  --shadow-lg:none;
   --shadow-xl:var(--shadow-modal);
   --sidebar-w:224px;
-  --topbar-h:66px;
+  --topbar-h:60px;
 }
 
 /* ============================================================ RESET */
@@ -114,26 +125,26 @@ input,textarea,select{font-family:inherit;font-size:14px;}
 :focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
 
 /* ============================================================ LAYOUT */
-.shell{display:flex;min-height:100dvh;}
+.shell{display:flex;min-height:100dvh;background:var(--page-bg);}
 .side,.sidebar{
-  width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--surface);color:var(--sidebar-text);
+  width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--frame);color:var(--ink-2);
   height:100dvh;position:sticky;top:0;overflow-y:auto;display:flex;flex-direction:column;
-  padding:18px 12px 16px;scrollbar-width:none;border-right:1px solid var(--border);
+  padding:18px 12px 16px;scrollbar-width:none;border-right:1px solid var(--card-border);
 }
 .side::-webkit-scrollbar,.sidebar::-webkit-scrollbar{display:none;}
 .main-col{flex:1;min-width:0;display:flex;flex-direction:column;}
 .topbar{
-  height:var(--topbar-h);flex:0 0 var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);
+  height:var(--topbar-h);flex:0 0 var(--topbar-h);background:var(--frame);border-bottom:1px solid var(--card-border);
   display:flex;align-items:center;justify-content:space-between;padding:0 22px;
   position:sticky;top:0;z-index:30;
 }
 .main,.content{padding:26px 30px 60px;max-width:1400px;}
 
-/* ============================================================ SIDEBAR */
+/* ============================================================ BRAND */
 .brand,.logo{display:flex;align-items:center;gap:9px;padding:4px 8px 18px;}
 .logo-mark,.brand-mark{
   width:28px;height:28px;border-radius:8px;
-  background:var(--ink);
+  background:var(--olive);
   display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex:none;
 }
 .logo-text,.brand-text{display:flex;flex-direction:column;line-height:1.15;}
@@ -1343,6 +1354,128 @@ table tbody tr{border-top:1px solid var(--border);}
 }
 .empty-state{position:relative;}
 
-/* Shadows are never applied to these surfaces. */
-.side,.sidebar,.topbar,table tbody tr,.status-pill,.nav-item{box-shadow:none;}
+/* ============================================================
+   DESIGN SYSTEM v2 — OLIVE + HATCH
+   Loaded last so it overrides the earlier direction's rules.
+   ============================================================ */
+
+/* ---- §7 Shadow discipline: exactly one shadow, on the frame ---- */
+.card,.panel,.stat-card,.big-card,.result-shell,.opt-block,.status-card,
+.quick-start-card,.qs-card,.resume-card,.domain-card,.pastel-card,
+table,.side,.sidebar,.topbar,table tbody tr,.nav-item{box-shadow:none;}
+.pastel-card:hover{transform:none;box-shadow:none;}
+
+/* ---- §2 Typography: Manrope for numbers/headings, Inter for the rest ---- */
+body{font-family:var(--sans);}
+h1,h2,h3,.page-title,.card-heading,.dash-greeting,.stat-card .value,
+.result-score,.gauge-num,.stat-num,.big-card-title,.match-linear .pct{
+  font-family:var(--display);
+}
+.dash-greeting{font-size:24px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
+h1.page-title{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
+.page-sub{color:var(--ink-2);font-size:13.5px;}
+.big-card-title{font-size:17px;font-weight:700;color:var(--ink);}
+.card-heading,.panel-head h2,.section-title-row h2{font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);}
+.logo-name{font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.01em;}
+.logo-text .name,.brand-text .name{font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.01em;}
+
+/* ---- §5 The hatch texture: the one signature device ---- */
+.hatch-grey{
+  background-image:repeating-linear-gradient(135deg,var(--hatch-grey) 0 3px,transparent 3px 8px);
+  background-color:#F7F7F8;
+}
+.hatch-olive{
+  background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.16) 0 3px,transparent 3px 8px),
+                   linear-gradient(var(--olive),var(--olive));
+}
+
+/* ---- §6 Cards ---- */
+.card,.panel{background:var(--frame);border:1px solid var(--card-border);border-radius:var(--r-card);}
+.big-card{background:var(--frame);border:1px solid var(--card-border);border-radius:var(--r-bigcard);padding:24px 26px;}
+.big-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;}
+.big-card-sub{font-size:12.5px;color:var(--ink-2);margin-top:3px;}
+
+.stat-card{border:1px solid var(--card-border);border-radius:var(--r-card);padding:18px 20px;}
+.stat-chip{
+  width:34px;height:34px;border-radius:10px;background:var(--olive-soft);color:var(--olive);
+  display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;
+}
+.stat-num{font-family:var(--display);font-size:25px;font-weight:700;color:var(--ink);letter-spacing:-.02em;line-height:1.1;margin-top:14px;}
+.stat-label{font-size:12.5px;color:var(--ink-2);margin-top:3px;}
+.stat-card .value{font-family:var(--display);font-size:25px;font-weight:700;letter-spacing:-.02em;}
+
+/* ---- §6 Delta pill: only ever next to a real comparison ---- */
+.delta-pill{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 8px;border-radius:var(--r-pill);margin-left:8px;}
+.delta-pill.pos{background:var(--pos-bg);color:var(--pos-text);}
+.delta-pill.neg{background:var(--neg-bg);color:var(--neg-text);}
+
+/* ---- §6 Status / activity tag ---- */
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:var(--r-pill);}
+.tag.ok{background:var(--olive-pill-bg);color:var(--olive-dark);}
+.tag.attn{background:var(--neg-bg);color:var(--neg-text);}
+
+/* ---- §6 Bar chart ---- */
+.bar-chart{display:flex;align-items:flex-end;gap:10px;height:180px;}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end;position:relative;}
+.bar{width:100%;border-radius:8px;transition:height .4s;}
+.bar-label{font-size:11.5px;color:var(--ink-3);font-weight:500;}
+.bar-col.active .bar-label{color:var(--ink);font-weight:700;}
+.bar-tip{
+  position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);
+  background:var(--ink);color:#fff;font-size:11.5px;font-weight:600;font-family:var(--display);
+  padding:5px 10px;border-radius:8px;white-space:nowrap;
+}
+.bar-tip::after{
+  content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+  border:5px solid transparent;border-top-color:var(--ink);
+}
+
+/* ---- §6 Dashed gauge: two paths, no chart dependency ---- */
+.gauge{position:relative;display:flex;flex-direction:column;align-items:center;}
+.gauge svg{display:block;overflow:visible;}
+.gauge .g-track{stroke:#E7E7EA;stroke-dasharray:4 6;fill:none;stroke-width:10;}
+.gauge .g-prog{stroke:var(--olive);stroke-linecap:round;fill:none;stroke-width:10;transition:stroke-dasharray .5s;}
+.gauge-center{position:absolute;top:52%;left:50%;transform:translate(-50%,-50%);text-align:center;}
+.gauge-num{font-family:var(--display);font-size:26px;font-weight:700;color:var(--ink);line-height:1;}
+.gauge-delta{font-size:12px;color:var(--ink-2);margin-top:4px;}
+
+/* ---- §6 Activity row ---- */
+.activity-row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--card-border);}
+.activity-row:last-child{border-bottom:none;}
+.activity-avatar{
+  width:34px;height:34px;border-radius:10px;background:var(--olive-soft);color:var(--olive-dark);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;
+}
+.activity-name{font-size:13.5px;font-weight:600;color:var(--ink);}
+.activity-meta{font-size:12px;color:var(--ink-2);margin-top:1px;}
+.activity-time{margin-left:auto;font-size:12px;color:var(--ink-3);white-space:nowrap;}
+
+/* ---- §6 Buttons: pill-bordered by default; solid olive stays rare ---- */
+.btn{border-radius:var(--r-pill);height:38px;font-family:var(--sans);font-weight:600;}
+.btn-secondary,.btn-ghost{border:1px solid var(--card-border);background:var(--frame);color:var(--ink);}
+.btn-ghost:hover,.btn-secondary:hover{background:var(--surface-sunken);}
+.btn-primary{background:var(--olive);color:#fff;border-color:var(--olive);}
+.btn-primary:hover{background:var(--olive-dark);border-color:var(--olive-dark);}
+.btn-pill{
+  display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 18px;
+  border:1px solid var(--card-border);border-radius:var(--r-pill);background:var(--frame);
+  color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;transition:.12s;
+}
+.btn-pill:hover{background:var(--surface-sunken);}
+.avatar-btn{
+  all:unset;width:36px;height:36px;border-radius:50%;background:var(--olive-soft);color:var(--olive-dark);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;cursor:pointer;
+  font-family:var(--display);
+}
+
+/* Progress fills are hatch-textured, never flat (§9). */
+.bar-fill,.progress-fill,.credit-bar > div{
+  background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.16) 0 3px,transparent 3px 8px),
+                   linear-gradient(var(--olive),var(--olive));
+}
+.bar-track,.progress-bar{background:var(--track);}
+
+/* The pastel and dot-grid devices belong to the superseded direction. */
+.pastel-card{background:var(--frame);border:1px solid var(--card-border);border-radius:var(--r-card);}
+.dot-grid{background-image:none;}
 
