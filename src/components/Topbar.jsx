@@ -4,7 +4,7 @@ import { getTheme, toggleTheme } from '../lib/theme.js';
 
 const TITLES = {
   dashboard: 'Dashboard',
-  agent: 'Resume Studio',
+  agent: 'Tailor Resume',
   resumes: 'Resumes',
   careerprofile: 'Career Profile',
   insights: 'AI Insights',
