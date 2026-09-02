@@ -551,7 +551,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
 
       <div className="ws-split">
         {/* ============ LEFT: SELECT ============ */}
-        <div>
+        <div className="ws-select">
           <div className="ws-col-head">
             <span className="ws-col-num">01 · select</span>
             <span className="ws-col-status">{selectStatus}</span>
@@ -737,14 +737,16 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
                 </div>
               </OptBlock>
             )}
+          </div>
 
-            {/* ---- Custom instructions ---- */}
+          {/* Pinned to the bottom of the Select column so Generate is always reachable */}
+          <div className="opt-footer">
             <OptBlock title="Custom instructions" summary={customInstructions.trim() ? 'Set' : 'Optional'} defaultOpen={false}>
               <textarea rows={3} value={customInstructions} onChange={e => setCustomInstructions(e.target.value)}
                 placeholder="e.g. Emphasize leadership, keep it to one page, lead with the Microsoft role…" />
             </OptBlock>
 
-            <button className="btn btn-primary btn-full" style={{ marginTop: 4 }}
+            <button className="btn btn-primary btn-full"
               disabled={loading || regenerating || !canAdvance}
               onClick={version ? handleAggressiveRebuild : (mode === 'scratch' ? runScratchPipeline : runTailorPipeline)}>
               {loading || regenerating ? 'Generating…' : version ? '↻ Regenerate' : 'Generate Resume →'}
