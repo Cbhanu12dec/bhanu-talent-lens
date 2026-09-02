@@ -3,19 +3,14 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 
 const WORKSPACE_NAV = [
   { key: 'dashboard',    icon: '▦', label: 'Dashboard' },
-  { key: 'resumes',      icon: '▤', label: 'Resumes' },
   { key: 'agent',        icon: '✦', label: 'Build / Tailor Resume', badge: 'NEW' },
 ];
-const CAREER_NAV = [
+const LIBRARY_NAV = [
+  { key: 'resumes',      icon: '▤', label: 'Resumes' },
   { key: 'careerprofile', icon: '◈', label: 'Career Profile' },
-];
-const TOOLS_NAV = [
-  { key: 'insights',   icon: '◉', label: 'AI Insights' },
-  { key: 'templates',  icon: '▣', label: 'Templates' },
 ];
 const ACCOUNT_NAV = [
   { key: 'billing',  icon: '▱', label: 'Billing' },
-  { key: 'aiprefs',  icon: '⚙', label: 'AI Preferences' },
   { key: 'settings', icon: '⚙', label: 'Settings' },
 ];
 const ADMIN_NAV = [
@@ -50,7 +45,7 @@ export default function Sidebar({ view, setView, resumeCount, credits, creditsMa
   function Section({ label, items, isAdmin = false }) {
     return (
       <div>
-        <div className="nav-group-label" style={isAdmin ? { color: '#D2965A' } : {}}>
+        <div className="nav-group-label" style={isAdmin ? { color: 'var(--admin)' } : {}}>
           {label}
         </div>
         <nav className="nav">
@@ -74,8 +69,7 @@ export default function Sidebar({ view, setView, resumeCount, credits, creditsMa
       </div>
 
       <Section label="Workspace" items={WORKSPACE_NAV} />
-      <Section label="Career" items={CAREER_NAV} />
-      <Section label="Tools" items={TOOLS_NAV} />
+      <Section label="Library" items={LIBRARY_NAV} />
       <Section label="Account" items={ACCOUNT_NAV} />
       {user?.email === ADMIN_EMAIL && (
         <Section label="Admin" items={ADMIN_NAV} isAdmin />

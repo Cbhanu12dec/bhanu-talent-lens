@@ -17,11 +17,7 @@ export default function CommandPalette({ setView }) {
     { id: 'agent', label: 'Build / Tailor Resume', group: 'Navigate', run: () => setView('agent') },
     { id: 'careerprofile', label: 'Go to Career Profile', group: 'Navigate', run: () => setView('careerprofile') },
     { id: 'resumes', label: 'Go to Resumes', group: 'Navigate', run: () => setView('resumes') },
-    { id: 'insights', label: 'Go to AI Insights', group: 'Navigate', run: () => setView('insights') },
-    { id: 'templates', label: 'Go to Templates', group: 'Navigate', run: () => setView('templates') },
-    { id: 'coverletters', label: 'Go to Cover letters', group: 'Navigate', run: () => setView('coverletters') },
     { id: 'billing', label: 'Go to Billing', group: 'Navigate', run: () => setView('billing') },
-    { id: 'aiprefs', label: 'Go to AI preferences', group: 'Navigate', run: () => setView('aiprefs') },
     { id: 'settings', label: 'Go to Settings', group: 'Navigate', run: () => setView('settings') },
     { id: 'theme', label: theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode', group: 'Actions', run: () => setThemeState(toggleTheme()) },
     { id: 'signout', label: 'Sign out', group: 'Actions', run: logout }
