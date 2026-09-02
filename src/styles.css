@@ -1159,6 +1159,19 @@ tbody tr:hover{background:var(--bg);}
 .ver-name{display:block;font-size:11.2px;font-weight:650;color:var(--ink);line-height:1.2;}
 .ver-count{display:block;font-size:9.8px;color:var(--ink-3);font-family:var(--mono);}
 
+/* Iterate-on-draft switch — on by default, so each generate edits the draft
+   in view instead of starting over. */
+.iterate-toggle{margin-bottom:10px;background:var(--brand-soft);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;}
+.switch-row{display:flex;align-items:flex-start;gap:10px;cursor:pointer;}
+.switch{position:relative;width:34px;height:20px;border-radius:99px;background:var(--border-strong);flex:none;transition:background .15s;margin-top:1px;}
+.switch[data-on="true"]{background:var(--brand);}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;width:100%;height:100%;}
+.switch-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s;pointer-events:none;}
+.switch[data-on="true"] .switch-knob{transform:translateX(14px);}
+.switch-text{min-width:0;}
+.switch-title{display:block;font-size:12.6px;font-weight:650;color:var(--ink);}
+.switch-sub{display:block;font-size:11px;color:var(--ink-2);line-height:1.45;margin-top:2px;}
+
 /* Export receipt */
 .receipt{background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:12px;}
 .receipt-title{font-size:10.5px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:8px;}

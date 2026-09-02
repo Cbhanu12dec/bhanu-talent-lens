@@ -200,6 +200,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   const [showHighlights, setShowHighlights] = useState(true);
   const [rebuildSections, setRebuildSections] = useState({ summary: true, experience: true });
   const [selectedKeywords, setSelectedKeywords] = useState([]);
+  const [iterateOnDraft, setIterateOnDraft] = useState(true);
 
   // Export state
   const [exportFormat, setExportFormat] = useState('pdf');
@@ -416,25 +417,32 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
 
   async function handleAggressiveRebuild() {
     const directive = buildRebuildDirective();
+    const basedOnDraft = iterateOnDraft && Boolean(version);
     setRegenerating(true); setError(''); setBuildLog([]);
-    addLog('Reading your selections…');
+    addLog(basedOnDraft ? `Editing v${historyIdx + 1}…` : 'Reading your selections…');
     try {
       if (mode === 'scratch') {
         if (!strategy || !jobDescription || !runId || !profile) throw new Error('Missing run context — start a new run.');
-        addLog('Rewriting bullets against the JD…');
+        addLog(basedOnDraft ? 'Applying your instructions to the draft…' : 'Rewriting bullets against the JD…');
         const updatedStrategy = { ...strategy, positioning: appendCustom(strategy.positioning, [domainDirective, directive].filter(Boolean).join(' ')) };
         const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
           agentRunId: runId, careerProfile: profile, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId,
+          previousResume: basedOnDraft ? version.content : undefined,
         });
         addLog('Scoring match…');
         const v = await getResumeVersion(uid, versionId);
-        pushVersion(v, 'Refined');
+        pushVersion(v, basedOnDraft ? `Edit of v${historyIdx + 1}` : 'Rebuild');
         if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
         notify?.({ kind: 'good', title: 'Resume rebuilt', detail: `ATS match score: ${matchScore}%` });
       } else {
         if (!baseResume) throw new Error('Base resume missing — start a new run.');
-        addLog('Rewriting bullets against the JD…');
-        await generateTailoredVersion(baseResume, directive ? [directive] : [], 'aggressive', 'Refined');
+        addLog(basedOnDraft ? 'Applying your instructions to the draft…' : 'Rewriting bullets against the JD…');
+        // Feeding the current draft back in as the source is what makes this an
+        // edit of v-n rather than a fresh tailor of the original resume.
+        const source = basedOnDraft
+          ? { ...baseResume, text: flattenResume(version.content) }
+          : baseResume;
+        await generateTailoredVersion(source, directive ? [directive] : [], 'aggressive', basedOnDraft ? `Edit of v${historyIdx + 1}` : 'Refined');
       }
       setSelectedKeywords([]);
     } catch (err) {
@@ -804,10 +812,29 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
                 placeholder="e.g. Emphasize leadership, keep it to one page, lead with the Microsoft role…" />
             </OptBlock>
 
+            {version && (
+              <div className="iterate-toggle">
+                <label className="switch-row">
+                  <span className="switch" data-on={iterateOnDraft}>
+                    <input type="checkbox" checked={iterateOnDraft} onChange={e => setIterateOnDraft(e.target.checked)} />
+                    <span className="switch-knob" />
+                  </span>
+                  <span className="switch-text">
+                    <span className="switch-title">Build on top of v{historyIdx + 1}</span>
+                    <span className="switch-sub">
+                      {iterateOnDraft
+                        ? 'Your instructions are applied to this draft, keeping everything else intact.'
+                        : `Off: starts over from your ${mode === 'scratch' ? 'Career Profile' : 'base resume'}, ignoring this draft.`}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
+
             <button className="btn btn-primary btn-full"
               disabled={loading || regenerating || !canAdvance}
               onClick={version ? handleAggressiveRebuild : (mode === 'scratch' ? runScratchPipeline : runTailorPipeline)}>
-              {loading || regenerating ? 'Generating…' : version ? '↻ Regenerate' : 'Generate Resume →'}
+              {loading || regenerating ? 'Generating…' : version ? (iterateOnDraft ? `↻ Apply to v${historyIdx + 1}` : '↻ Rebuild fresh') : 'Generate Resume →'}
             </button>
             {!canAdvance && !loading && (
               <div className="field-hint" style={{ marginTop: 6, textAlign: 'center' }}>
@@ -815,11 +842,6 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
                   : !jdText.trim() ? 'Paste a job description to continue.'
                   : mode === 'scratch' ? 'Pick a career profile and a target domain.'
                   : 'Pick a base resume.'}
-              </div>
-            )}
-            {version && canAdvance && !loading && !regenerating && (
-              <div className="field-hint" style={{ marginTop: 6, textAlign: 'center' }}>
-                Rebuilds from your {mode === 'scratch' ? 'Career Profile' : 'base resume'}, not from the draft on screen. Earlier drafts stay available above.
               </div>
             )}
           </div>

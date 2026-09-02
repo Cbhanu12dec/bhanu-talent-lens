@@ -1125,7 +1125,7 @@ JOB TITLE: ${jobDescription.title || ''}`;
 
   // ---- TASK: agentBuild — generate full resume from profile + strategy ----
   if (task === 'agentBuild') {
-    const { agentRunId, careerProfile, jobDescription, strategy, domainId } = payload || {};
+    const { agentRunId, careerProfile, jobDescription, strategy, domainId, previousResume } = payload || {};
     if (!careerProfile || !jobDescription || !strategy) throw new HttpsError('invalid-argument', 'careerProfile, jobDescription, and strategy are required.');
 
     // Spend 1 credit for build
@@ -1167,6 +1167,9 @@ Do not carry over generic duties. Rebuild each bullet from the underlying projec
 PUNCTUATION - hard rule
 Never use em dashes or en dashes anywhere in the output. Use commas, colons, or separate sentences instead. For date ranges use a plain hyphen, e.g. "Jan 2020 - Mar 2023".
 
+REVISION MODE
+If the user message includes an EXISTING DRAFT, you are editing that draft, not authoring a new resume. Preserve its structure, section order, and wording exactly except where an instruction requires a change. Change the minimum needed to satisfy the instructions, then re-check the whole document against the ATS rules below. If no EXISTING DRAFT is provided, build the resume from the ground truth as described above.
+
 ${ATS_RULES}
 
 Respond in EXACTLY this JSON format, nothing else:
@@ -1191,7 +1194,12 @@ CRITICAL REQUIREMENTS: ${criticalReqs}
 PRIORITY EMPLOYERS TO LEAD WITH: ${priorityEmployers || 'all'}
 POSITIONING: ${strategy.positioning || ''}
 SKILLS TO HIGHLIGHT: ${(strategy.skillPriority || []).slice(0, 8).join(', ')}
-${styleNote ? `STYLE DIRECTIVES: ${styleNote}` : ''}`;
+${styleNote ? `STYLE DIRECTIVES: ${styleNote}` : ''}${previousResume ? `
+
+EXISTING DRAFT — revise this, do not start over:
+${JSON.stringify(previousResume)}
+
+Apply the POSITIONING instructions above to the draft as targeted edits. Keep everything that already works (structure, wording, ordering) byte-for-byte unless an instruction calls for changing it. The ground truth above still bounds what may be claimed.` : ''}`;
 
     async function runAgentBuildPass(userContent, logTag) {
       const rawOut = await callAnthropic(apiKey, userContent, {

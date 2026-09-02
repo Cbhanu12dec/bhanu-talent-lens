@@ -97,9 +97,9 @@ export async function analyzeAgentRun({ agentRunId, careerProfile, jobDescriptio
   return strategy;
 }
 
-export async function buildAgentResume({ agentRunId, careerProfile, jobDescription, strategy, domainId }) {
+export async function buildAgentResume({ agentRunId, careerProfile, jobDescription, strategy, domainId, previousResume }) {
   try {
-    const { versionId, matchScore, creditsRemaining } = await agentProxy('agentBuild', { agentRunId, careerProfile, jobDescription, strategy, domainId });
+    const { versionId, matchScore, creditsRemaining } = await agentProxy('agentBuild', { agentRunId, careerProfile, jobDescription, strategy, domainId, previousResume });
     return { versionId, matchScore, creditsRemaining };
   } catch (err) {
     if (err?.code === 'functions/resource-exhausted') {
