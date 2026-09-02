@@ -46,6 +46,12 @@ service cloud.firestore {
       match /resumeVersions/{versionId} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
+      // Self-serve domains the user creates from the workspace. Scoped to the
+      // owner so a custom domain can never leak into, or overwrite, the
+      // admin-curated global `domains` collection below.
+      match /customDomains/{domainId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
     }
     // Domains — published name+summary readable by any signed-in user;
     // write access gated entirely through the agentProxy Cloud Function (Admin SDK).

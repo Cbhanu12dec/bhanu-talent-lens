@@ -122,10 +122,10 @@ function Workspace() {
             <DashboardOverview state={state} setView={setView} notify={notify} />
           </Keep>
           <Keep active={view === 'tailor' || view === 'agent'}>
-            <AgentView uid={uid} state={state} notify={notify} credits={credits} onCreditsChange={handleCreditsChange} />
+            <AgentView uid={uid} state={state} setView={setView} notify={notify} credits={credits} onCreditsChange={handleCreditsChange} />
           </Keep>
           <Keep active={view === 'library' || view === 'resumes'}>
-            <ResumeLibraryView uid={uid} state={state} notify={notify} />
+            <ResumeLibraryView uid={uid} state={state} setView={setView} notify={notify} />
           </Keep>
           <Keep active={view === 'billing'}>
             <BillingView uid={uid} credits={credits} creditsTotal={creditsTotal} checkoutStatus={checkoutStatus} active={view === 'billing'} onRefresh={refreshProfile} />

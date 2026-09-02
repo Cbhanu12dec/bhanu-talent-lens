@@ -204,6 +204,34 @@ function CouponsTab() {
 }
 
 /* ===================== DOMAIN BUILDER TAB ===================== */
+/* ===================== DOMAIN BUILDER TAB ===================== */
+
+// Reusable one-click instructions. Most sub-domains need some combination of
+// these, so they're toggles rather than something to retype per sub-domain.
+const INSTRUCTION_PRESETS = [
+  'Emphasize technical depth over breadth.',
+  'Lead with scale metrics (requests/sec, users, regions).',
+  'Foreground cross-team leadership and ownership.',
+  'Prioritize cloud and infrastructure vocabulary.',
+  'Highlight data volume and pipeline throughput.',
+  'Frame work around delivery, timelines, and stakeholders.',
+  'Surface security, compliance, and reliability outcomes.',
+  'Favor product impact and user outcomes over implementation detail.',
+];
+
+// Accepts a comma/newline separated paste and returns de-duped, trimmed terms.
+function parseKeywordPaste(raw, existing = []) {
+  const parsed = String(raw || '').split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+  const lower = new Set(existing.map(e => e.toLowerCase()));
+  const out = [];
+  for (const p of parsed) {
+    if (lower.has(p.toLowerCase())) continue;
+    lower.add(p.toLowerCase());
+    out.push(p);
+  }
+  return out;
+}
+
 function DomainBuilderTab({ notify }) {
   const [domains, setDomains] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -285,9 +313,9 @@ function DomainBuilderTab({ notify }) {
 
   /* ── New sub-domain creation ── */
   function addNewSubSkill() {
-    const v = newSubSkillInput.trim();
-    if (!v || newSubSkills.includes(v)) return;
-    setNewSubSkills(s => [...s, v]);
+    const added = parseKeywordPaste(newSubSkillInput, newSubSkills);
+    if (!added.length) return;
+    setNewSubSkills(s => [...s, ...added]);
     setNewSubSkillInput('');
   }
 
@@ -346,11 +374,14 @@ function DomainBuilderTab({ notify }) {
   }
 
   async function handleAddSkill(catId) {
-    const v = addSkillState.subId === catId ? addSkillState.val.trim() : '';
-    if (!v) return;
+    const cat = (dom.categories || []).find(c => c.id === catId);
+    const raw = addSkillState.subId === catId ? addSkillState.val : '';
+    const added = parseKeywordPaste(raw, (cat?.skills || []).map(s => s.label));
+    if (!added.length) return;
     setSaving(true);
+    const ts = Date.now();
     const cats = (dom.categories || []).map(c =>
-      c.id === catId ? { ...c, skills: [...(c.skills || []), { id: 'sk_' + Date.now(), label: v, weight: 3 }] } : c
+      c.id === catId ? { ...c, skills: [...(c.skills || []), ...added.map((label, i) => ({ id: 'sk_' + ts + i, label, weight: 3 }))] } : c
     );
     await domainAdminAction('update', dom.id, { categories: cats });
     setAddSkillState({ subId: catId, val: '' }); setSaving(false);
@@ -365,15 +396,16 @@ function DomainBuilderTab({ notify }) {
     await load();
   }
 
-  async function handleAddInstr(catId) {
-    const v = addInstrState.subId === catId ? addInstrState.val.trim() : '';
+  async function handleAddInstr(catId, presetText) {
+    const v = presetText || (addInstrState.subId === catId ? addInstrState.val.trim() : '');
     if (!v) return;
     setSaving(true);
     const cats = (dom.categories || []).map(c =>
       c.id === catId ? { ...c, strongPoints: [...(c.strongPoints || []), { id: 'sp_' + Date.now(), text: v }] } : c
     );
     await domainAdminAction('update', dom.id, { categories: cats });
-    setAddInstrState({ subId: catId, val: '' }); setSaving(false);
+    if (!presetText) setAddInstrState({ subId: catId, val: '' });
+    setSaving(false);
     await load();
   }
 
@@ -488,12 +520,14 @@ function DomainBuilderTab({ notify }) {
                       {!newSubSkills.length && <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>No skills added yet</span>}
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <input type="text" placeholder="Type a skill, press Enter or + Add" value={newSubSkillInput}
+                      <textarea rows={2} placeholder="Paste a list — commas or one per line" value={newSubSkillInput}
                         onChange={e => setNewSubSkillInput(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && addNewSubSkill()}
+                        onBlur={addNewSubSkill}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNewSubSkill(); } }}
                         style={{ flex: 1 }} />
-                      <button className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', background: 'transparent' }} onClick={addNewSubSkill}>+ Add</button>
+                      <button className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', background: 'transparent', alignSelf: 'flex-start' }} onClick={addNewSubSkill}>+ Add</button>
                     </div>
+                    <div className="field-hint">Comma or newline separated. Duplicates are removed automatically.</div>
                   </div>
 
                   {/* ② Agent Instructions — amber */}
@@ -502,15 +536,20 @@ function DomainBuilderTab({ notify }) {
                       🔒 ② Agent Instructions
                       <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11, marginLeft: 6 }}>writing directives — never shown to users</span>
                     </div>
+                    <div className="chips" style={{ marginBottom: 10 }}>
+                      {INSTRUCTION_PRESETS.filter(p => !newSubInstrs.includes(p)).map(p => (
+                        <div key={p} className="chip add" onClick={() => setNewSubInstrs(s => [...s, p])}>+ {p}</div>
+                      ))}
+                    </div>
                     {newSubInstrs.map((t, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5, color: 'var(--text-secondary)', gap: 8 }}>
                         <span>{t}</span>
                         <span style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }} onClick={() => setNewSubInstrs(arr => arr.filter((_, j) => j !== i))}>✕</span>
                       </div>
                     ))}
-                    {!newSubInstrs.length && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', padding: '4px 0 8px' }}>No instructions added yet</div>}
+                    {!newSubInstrs.length && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', padding: '4px 0 8px' }}>No instructions added yet — click a preset above, or write your own below</div>}
                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      <input type="text" placeholder="e.g. Lead with scale metrics (requests/sec, regions)" value={newSubInstrInput}
+                      <input type="text" placeholder="Or write your own…" value={newSubInstrInput}
                         onChange={e => setNewSubInstrInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && addNewSubInstr()}
                         style={{ flex: 1 }} />
@@ -573,14 +612,15 @@ function DomainBuilderTab({ notify }) {
                           {!cat.skills?.length && <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>No skills yet — add one below</span>}
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <input type="text" placeholder="Type a skill, press Enter or + Add"
+                          <textarea rows={2} placeholder="Paste a list — commas or one per line"
                             value={addSkillState.subId === cat.id ? addSkillState.val : ''}
                             onFocus={() => setAddSkillState(s => ({ ...s, subId: cat.id }))}
                             onChange={e => setAddSkillState({ subId: cat.id, val: e.target.value })}
-                            onKeyDown={e => e.key === 'Enter' && handleAddSkill(cat.id)}
+                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddSkill(cat.id); } }}
                             style={{ flex: 1 }} />
-                          <button className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', background: 'transparent' }} disabled={saving} onClick={() => handleAddSkill(cat.id)}>+ Add</button>
+                          <button className="btn btn-sm" style={{ color: 'var(--primary)', border: '1px solid var(--primary)', background: 'transparent', alignSelf: 'flex-start' }} disabled={saving} onClick={() => handleAddSkill(cat.id)}>+ Add</button>
                         </div>
+                        <div className="field-hint">Comma or newline separated. Duplicates are removed automatically.</div>
                       </div>
 
                       {/* Instructions block — amber */}
@@ -589,15 +629,20 @@ function DomainBuilderTab({ notify }) {
                           🔒 Agent Instructions
                           <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6 }}>writing directives — never shown to users</span>
                         </div>
+                        <div className="chips" style={{ marginBottom: 10 }}>
+                          {INSTRUCTION_PRESETS.filter(p => !(cat.strongPoints || []).some(sp => sp.text === p)).map(p => (
+                            <div key={p} className="chip add" onClick={() => handleAddInstr(cat.id, p)}>+ {p}</div>
+                          ))}
+                        </div>
                         {(cat.strongPoints || []).map(sp => (
                           <div key={sp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5, color: 'var(--text-secondary)', gap: 8 }}>
                             <span>{sp.text}</span>
                             <button className="btn btn-xs btn-ghost" style={{ color: 'var(--danger)', flexShrink: 0 }} onClick={() => handleDeleteSp(cat.id, sp.id)}>✕</button>
                           </div>
                         ))}
-                        {!cat.strongPoints?.length && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', padding: '4px 0 8px' }}>No instructions yet — add one below</div>}
+                        {!cat.strongPoints?.length && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', padding: '4px 0 8px' }}>No instructions yet — click a preset above, or write your own below</div>}
                         <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                          <input type="text" placeholder="e.g. Lead with scale metrics (requests/sec, regions)"
+                          <input type="text" placeholder="Or write your own…"
                             value={addInstrState.subId === cat.id ? addInstrState.val : ''}
                             onFocus={() => setAddInstrState(s => ({ ...s, subId: cat.id }))}
                             onChange={e => setAddInstrState({ subId: cat.id, val: e.target.value })}
@@ -608,6 +653,9 @@ function DomainBuilderTab({ notify }) {
                       </div>
 
                       {/* Footer: Rename / Publish-Unpublish / Delete */}
+                      {!cat.skills?.length && cat.status !== 'published' && (
+                        <div className="publish-guard">🔒 Add at least one keyword before this sub-domain can be published.</div>
+                      )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12 }}>
                         {renamingSubId === cat.id ? (
                           <>
@@ -621,7 +669,9 @@ function DomainBuilderTab({ notify }) {
                         ) : (
                           <>
                             <button className="btn btn-sm btn-ghost" onClick={() => { setRenamingSubId(cat.id); setRenameSubVal(cat.name); }}>Rename</button>
-                            <button className={`btn btn-sm ${cat.status === 'published' ? 'btn-ghost' : 'btn-admin'}`} onClick={() => handleToggleSubPublish(cat)}>
+                            <button className={`btn btn-sm ${cat.status === 'published' ? 'btn-ghost' : 'btn-admin'}`}
+                              disabled={cat.status !== 'published' && !cat.skills?.length}
+                              onClick={() => handleToggleSubPublish(cat)}>
                               {cat.status === 'published' ? 'Unpublish' : 'Publish'}
                             </button>
                             <button className="btn btn-sm btn-danger" onClick={() => handleDeleteSub(cat.id)}>Delete</button>

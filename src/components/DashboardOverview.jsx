@@ -44,32 +44,29 @@ export default function DashboardOverview({ state, setView, notify }) {
         </div>
       </div>
 
-      {/* Quick Start */}
-      <div className="section-title-row">
-        <h2>Quick Start</h2>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>One flow — build or tailor</span>
-      </div>
-      <div className="grid grid-2" style={{ marginBottom: 26 }}>
-        <div className="quick-start-card" onClick={() => setView('agent')}>
-          <div className="quick-start-icon">✦</div>
-          <div className="qs-title">New Resume</div>
-          <div className="qs-desc">Agent builds from your Career Profile + a domain — picks the best evidence for this role</div>
-        </div>
-        <div className="quick-start-card" onClick={() => setView('agent')}>
-          <div className="quick-start-icon">▤</div>
-          <div className="qs-title">Tailor Existing Resume</div>
-          <div className="qs-desc">Paste a JD, pick a resume you already have, and let AI optimize it in seconds</div>
-        </div>
-      </div>
-
-      {/* Feature banner */}
-      <div className="feature-banner">
-        <div>
-          <h3>✦ Build or Tailor with AI Agent</h3>
-          <p>Pick your profile, paste the JD — the Agent analyzes every requirement, maps your evidence, and builds a precision-matched resume. One flow, start to export.</p>
+      {/* Single entry point — shows the setup in use before asking the user to act */}
+      <div className="status-card">
+        <div className="status-card-body">
+          <div className="status-card-label">Your current setup</div>
+          <div className="status-card-rows">
+            <div className="status-card-row">
+              <span className="k">Default resume</span>
+              <span className="v">
+                {activeResume ? activeResume.label : <span className="none">None selected</span>}
+                {!activeResume && <a onClick={() => setView('library')}>Add one →</a>}
+              </span>
+            </div>
+            <div className="status-card-row">
+              <span className="k">Career profile</span>
+              <span className="v">
+                {profileInfo?.name || <span className="none">Not set up</span>}
+                {!profileInfo?.name && <a onClick={() => setView('careerprofile')}>Set up →</a>}
+              </span>
+            </div>
+          </div>
         </div>
         <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={() => setView('agent')}>
-          Start →
+          Open workspace →
         </button>
       </div>
 
@@ -101,9 +98,9 @@ export default function DashboardOverview({ state, setView, notify }) {
                     {r.atsScore ? <span className={`badge ${scoreBadgeClass(r.atsScore)}`}>{r.atsScore}</span> : <span className="cell-muted">—</span>}
                   </td>
                   <td>
-                    <span className={`badge badge-${r.id === state.activeResumeId ? 'success' : 'neutral'}`}>
-                      {r.id === state.activeResumeId ? 'Active' : 'Inactive'}
-                    </span>
+                    {r.id === state.activeResumeId
+                      ? <span className="badge badge-success">Default</span>
+                      : <span className="cell-muted">—</span>}
                   </td>
                   <td>
                     <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); setView('library'); }}>Open</button>

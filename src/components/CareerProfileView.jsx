@@ -5,6 +5,8 @@ import {
   addEducation, deleteEducation, addSkill, deleteSkill
 } from '../lib/firestore.js';
 
+const PROFILE_NAME_IDEAS = ['Full Stack roles', 'Program Manager roles', 'Data / ML roles', 'Early-career roles'];
+
 export default function CareerProfileView({ uid, notify }) {
   const [profiles, setProfiles] = useState([]);
   const [activeId, setActiveId] = useState('main');
@@ -128,12 +130,13 @@ export default function CareerProfileView({ uid, notify }) {
     setAddExpOpen(true);
   }
 
-  const completeness = Math.min(
-    ((profile.experience?.length > 0 ? 40 : 0) +
-     (profile.education?.length > 0 ? 25 : 0) +
-     (profile.skills?.length >= 3 ? 20 : 0) +
-     (profile.experience?.length > 1 ? 15 : 0)), 100
+  const completenessOf = (p) => Math.min(
+    (((p?.experience?.length || 0) > 0 ? 40 : 0) +
+     ((p?.education?.length || 0) > 0 ? 25 : 0) +
+     ((p?.skills?.length || 0) >= 3 ? 20 : 0) +
+     ((p?.experience?.length || 0) > 1 ? 15 : 0)), 100
   );
+  const completeness = completenessOf(profile);
 
   if (loading) return <div className="loading"><span className="spinner" /> Loading career profile…</div>;
 
@@ -169,7 +172,7 @@ export default function CareerProfileView({ uid, notify }) {
                   <>
                     <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => { setActiveId(p.id); setSwitcherOpen(false); }}>
                       <div className="profile-switcher-item-name">{p.name}{p.isDefault && <span className="badge badge-violet" style={{ marginLeft: 6 }}>Default</span>}</div>
-                      <div className="profile-switcher-item-meta">{p.experience?.length || 0} experience entries</div>
+                      <div className="profile-switcher-item-meta">{p.experience?.length || 0} experience · {p.skills?.length || 0} skills · {completenessOf(p)}% complete</div>
                     </div>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {!p.isDefault && <button className="btn btn-xs btn-ghost" title="Set as default" onClick={() => handleSetDefault(p.id)}>☆</button>}
@@ -182,10 +185,18 @@ export default function CareerProfileView({ uid, notify }) {
             ))}
             <div className="profile-switcher-divider" />
             {newProfileOpen ? (
-              <div style={{ display: 'flex', gap: 6, padding: '8px 12px' }}>
-                <input type="text" autoFocus value={newProfileName} onChange={e => setNewProfileName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleCreateProfile()} placeholder="e.g. Early-Career Profile" style={{ flex: 1 }} />
-                <button className="btn btn-xs btn-primary" onClick={handleCreateProfile}>Create</button>
+              <div style={{ padding: '8px 12px' }}>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input type="text" autoFocus value={newProfileName} onChange={e => setNewProfileName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreateProfile()} placeholder="e.g. Program Manager roles" style={{ flex: 1 }} />
+                  <button className="btn btn-xs btn-primary" onClick={handleCreateProfile}>Create</button>
+                </div>
+                <div className="chips" style={{ marginTop: 8 }}>
+                  {PROFILE_NAME_IDEAS.filter(n => !profiles.some(p => p.name === n)).map(n => (
+                    <div key={n} className="chip add" onClick={() => setNewProfileName(n)}>+ {n}</div>
+                  ))}
+                </div>
+                <div className="field-hint" style={{ marginTop: 6 }}>Name profiles by the kind of role they target, so you can tell them apart at a glance.</div>
               </div>
             ) : (
               <div className="profile-switcher-item" style={{ color: 'var(--primary)', fontWeight: 600 }} onClick={() => setNewProfileOpen(true)}>
@@ -301,7 +312,13 @@ export default function CareerProfileView({ uid, notify }) {
                 <button className="btn btn-xs btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => handleDeleteEdu(e.id)}>✕</button>
               </div>
             ))}
-            {!(profile.education?.length) && !addEduOpen && <div className="empty" style={{ fontSize: 12, textAlign: 'center', padding: '16px 0' }}>No education added</div>}
+            {!(profile.education?.length) && !addEduOpen && (
+              <div className="empty-state" style={{ padding: '18px 0' }}>
+                <div className="empty-state-icon">🎓</div>
+                <div className="empty-state-title">No education yet</div>
+                <button className="btn btn-sm btn-primary" onClick={() => setAddEduOpen(true)}>+ Add education</button>
+              </div>
+            )}
           </div>
 
           <div className="panel">
@@ -317,7 +334,13 @@ export default function CareerProfileView({ uid, notify }) {
                 </div>
               ))}
             </div>
-            {!(profile.skills?.length) && <div className="empty" style={{ fontSize: 12, marginTop: 4 }}>Add at least 3 skills for best results</div>}
+            {!(profile.skills?.length) && (
+              <div className="empty-state" style={{ padding: '18px 0' }}>
+                <div className="empty-state-icon">◈</div>
+                <div className="empty-state-title">No skills yet</div>
+                <p>Add at least 3 so the Agent has something to match against.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   listCareerProfiles, listDomainsPublic, createJobDescription, createAgentRun,
-  updateAgentRun, getResumeVersion, updateResumeVersionChanges, updateQualityFlag
+  updateAgentRun, getResumeVersion, updateResumeVersionChanges, updateQualityFlag,
+  listCustomDomains, createCustomDomain
 } from '../lib/firestore.js';
 import {
   parseJobDescription, analyzeAgentRun, buildAgentResume, tailorResume, getJdBreakdown,
@@ -24,41 +25,18 @@ function fileToBase64(file) {
   });
 }
 
-// Three steps now — Review and Export are merged, since export is just an
-// action bar (download / email / cover letter) sitting under the resume
-// you're already reviewing, not a separate destination.
-const STEPS = [
-  { key: 'setup', label: 'Setup', desc: 'Profile, domain, JD' },
-  { key: 'build', label: 'Build', desc: 'Analyze & generate' },
-  { key: 'review', label: 'Review & Export', desc: 'Refine, download, send' },
-];
-
-function StepNav({ currentStep }) {
-  const idx = STEPS.findIndex(s => s.key === currentStep);
+// Collapsible block in the Select column. Kept uncontrolled-by-default so a
+// user's expand state survives regeneration without extra plumbing.
+function OptBlock({ title, summary, children, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="stepper">
-      {STEPS.map((s, i) => (
-        <React.Fragment key={s.key}>
-          <div className={`step ${i < idx ? 'done' : i === idx ? 'current' : 'upcoming'}`}>
-            <div className="num">{i < idx ? '✓' : i + 1}</div>
-            <div className="lbl"><span className="t">{s.label}</span><span className="d">{s.desc}</span></div>
-          </div>
-          {i < STEPS.length - 1 && <div className="step-connector" />}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
-
-function ModeToggle({ mode, onChange }) {
-  return (
-    <div className="panel" style={{ marginBottom: 14 }}>
-      <div className="panel-head"><h2>Start From</h2></div>
-      <p className="field-hint" style={{ marginBottom: 10 }}>Build a resume from scratch, or tailor one you already have.</p>
-      <div className="seg-ctrl">
-        <button className={mode === 'scratch' ? 'active' : ''} onClick={() => onChange('scratch')}>Build from scratch</button>
-        <button className={mode === 'existing' ? 'active' : ''} onClick={() => onChange('existing')}>Tailor existing resume</button>
+    <div className="opt-block">
+      <div className="opt-block-head" onClick={() => setOpen(o => !o)}>
+        <span className="opt-block-chev">{open ? '▾' : '▸'}</span>
+        <span className="opt-block-title">{title}</span>
+        {!open && summary && <span className="opt-block-sub">{summary}</span>}
       </div>
+      {open && <div className="opt-block-body">{children}</div>}
     </div>
   );
 }
@@ -68,7 +46,6 @@ function JdInput({ jdText, setJdText, jdMode, setJdMode, imgStatus, setImgStatus
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
   const MAX_JD_IMAGES = 5;
-
   async function handleImages(files) {
     files = Array.from(files || []).slice(0, MAX_JD_IMAGES);
     if (!files.length) return;
@@ -86,14 +63,13 @@ function JdInput({ jdText, setJdText, jdMode, setJdMode, imgStatus, setImgStatus
   }
 
   return (
-    <div className="panel" style={{ marginBottom: 14 }}>
-      <div className="panel-head"><h2>Job description</h2></div>
+    <>
       <div className="mode-toggle">
         <button className={`mode-btn ${jdMode === 'text' ? 'active' : ''}`} onClick={() => setJdMode('text')}>✎ Paste text</button>
         <button className={`mode-btn ${jdMode === 'image' ? 'active' : ''}`} onClick={() => setJdMode('image')}>⇪ Upload image</button>
       </div>
       {jdMode === 'text' ? (
-        <textarea rows={10} value={jdText} onChange={e => setJdText(e.target.value)} placeholder="Paste the complete job description here…" />
+        <textarea rows={8} value={jdText} onChange={e => setJdText(e.target.value)} placeholder="Paste the complete job description here…" />
       ) : (
         <div>
           <div
@@ -115,7 +91,7 @@ function JdInput({ jdText, setJdText, jdMode, setJdMode, imgStatus, setImgStatus
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -126,20 +102,25 @@ const BUILD_STAGES = {
   existing: ['Reading your base resume…', 'Analyzing the job description…', 'Rewriting against the JD…', 'Optimizing for ATS…'],
 };
 
-export default function AgentView({ uid, state, notify, credits, onCreditsChange }) {
-  const { resumes, profileInfo } = state;
+export default function AgentView({ uid, state, setView, notify, credits, onCreditsChange }) {
+  const { resumes, profileInfo, activeResumeId } = state;
   const { ensureGmailToken } = useAuth();
   const [mode, setMode] = useState('scratch');
-  const [step, setStep] = useState('setup');
   const [runId, setRunId] = useState(null);
 
   // Setup state — scratch mode
   const [profiles, setProfiles] = useState([]);
   const [profileId, setProfileId] = useState('');
   const [domains, setDomains] = useState([]);
+  const [customDomains, setCustomDomains] = useState([]);
   const [selectedDomainId, setSelectedDomainId] = useState('');
-  const [profileSwitcherOpen, setProfileSwitcherOpen] = useState(false);
-  const [domainSwitcherOpen, setDomainSwitcherOpen] = useState(false);
+  const [domainQuery, setDomainQuery] = useState('');
+  const [createDomainOpen, setCreateDomainOpen] = useState(false);
+  const [newDomainName, setNewDomainName] = useState('');
+  const [newDomainParent, setNewDomainParent] = useState('');
+  const [newDomainKwRaw, setNewDomainKwRaw] = useState('');
+  const [newDomainKws, setNewDomainKws] = useState([]);
+  const [creatingDomain, setCreatingDomain] = useState(false);
 
   // Setup state — existing mode
   const [baseResumeId, setBaseResumeId] = useState('');
@@ -174,7 +155,6 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
   const [showHighlights, setShowHighlights] = useState(true);
   const [rebuildSections, setRebuildSections] = useState({ summary: true, experience: true });
   const [selectedKeywords, setSelectedKeywords] = useState([]);
-  const [rebuildNotes, setRebuildNotes] = useState('');
 
   // Export state
   const [exportFormat, setExportFormat] = useState('pdf');
@@ -192,14 +172,35 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
 
   useEffect(() => {
     listDomainsPublic().then(setDomains);
+    listCustomDomains(uid).then(setCustomDomains).catch(() => {});
     listCareerProfiles(uid).then(list => {
       setProfiles(list);
       setProfileId(list.find(p => p.isDefault)?.id || list[0]?.id || '');
     });
   }, [uid]);
 
+  // Library's "Tailor this" sets the default resume then routes here, so the
+  // default is what the workspace pre-selects as the base resume.
+  useEffect(() => {
+    if (activeResumeId) { setBaseResumeId(activeResumeId); setMode('existing'); }
+  }, [activeResumeId]);
+
   const profile = profiles.find(p => p.id === profileId) || null;
   const baseResume = resumes.find(r => r.id === baseResumeId);
+
+  const allDomains = [...domains, ...customDomains];
+  const selectedDomain = allDomains.find(d => d.id === selectedDomainId) || null;
+  const filteredDomains = domainQuery.trim()
+    ? allDomains.filter(d => `${d.name} ${d.summary || ''}`.toLowerCase().includes(domainQuery.trim().toLowerCase()))
+    : allDomains;
+
+  // Custom domains live under the user, not in the global `domains` collection,
+  // so the server-side lookup must be skipped and their keywords passed inline.
+  const isCustomDomain = Boolean(selectedDomain?.isCustom);
+  const effectiveDomainId = isCustomDomain ? null : selectedDomainId;
+  const domainDirective = isCustomDomain && selectedDomain.keywords?.length
+    ? `Target specialization "${selectedDomain.name}". Prioritize this domain's vocabulary throughout: ${selectedDomain.keywords.join(', ')}.`
+    : '';
 
   function addLog(text) {
     setBuildLog(prev => [...prev, { time: new Date().toLocaleTimeString(), text }]);
@@ -219,12 +220,12 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
   async function runScratchPipeline() {
     if (!jdText.trim() || !selectedDomainId || !profile) return;
     if (!profile.experience?.length) { setError('Add at least one experience entry to this Career Profile first.'); return; }
-    setError(''); setLoading(true); setStep('build'); resetBuildState();
+    setError(''); setLoading(true); resetBuildState();
 
     try {
       addLog(BUILD_STAGES.scratch[0]); advanceStage();
       const jdDoc = await createJobDescription(uid, jdText.trim());
-      const runDoc = await createAgentRun(uid, { careerProfileSnapshot: profile, domainId: selectedDomainId, jobDescriptionId: jdDoc.id });
+      const runDoc = await createAgentRun(uid, { careerProfileSnapshot: profile, domainId: effectiveDomainId, jobDescriptionId: jdDoc.id });
       setRunId(runDoc.id);
 
       addLog(BUILD_STAGES.scratch[1]); advanceStage();
@@ -233,15 +234,15 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
       setJobDescription(fullJd);
 
       addLog(BUILD_STAGES.scratch[2]); advanceStage();
-      const strat = await analyzeAgentRun({ agentRunId: runDoc.id, careerProfile: profile, jobDescription: fullJd, domainId: selectedDomainId });
+      const strat = await analyzeAgentRun({ agentRunId: runDoc.id, careerProfile: profile, jobDescription: fullJd, domainId: effectiveDomainId });
       setFindings({ roleMatch: strat.roleMatch, strongestEvidence: strat.strongestEvidence || [], gaps: [] });
       setStrategy(strat);
       await updateAgentRun(uid, runDoc.id, { currentStep: 'strategy', strategySnapshot: strat, jobDescriptionParsed: fullJd });
 
       addLog(BUILD_STAGES.scratch[3]); advanceStage();
-      const withInstructions = { ...strat, positioning: appendCustom(strat.positioning, customInstructions) };
+      const withInstructions = { ...strat, positioning: appendCustom(strat.positioning, [domainDirective, customInstructions].filter(Boolean).join(' ')) };
       const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
-        agentRunId: runDoc.id, careerProfile: profile, jobDescription: fullJd, strategy: withInstructions, domainId: selectedDomainId,
+        agentRunId: runDoc.id, careerProfile: profile, jobDescription: fullJd, strategy: withInstructions, domainId: effectiveDomainId,
       });
       addLog(BUILD_STAGES.scratch[4]); advanceStage();
       addLog(`Build complete — match score ${matchScore}%`);
@@ -250,7 +251,7 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
       setVersion(v);
       if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
       notify?.({ kind: 'good', title: 'Resume built', detail: `ATS match score: ${matchScore}%` });
-      setStep('review'); setReviewTab('resume');
+      setReviewTab('resume');
     } catch (err) {
       console.error(err);
       addLog(`Failed: ${err.message}`);
@@ -267,11 +268,11 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
   async function handleRegenerateScratch() {
     if (!strategy || !jobDescription || !runId || !profile) return;
     setRegenerating(true); setError('');
-    const updatedStrategy = { ...strategy, positioning: appendCustom(strategy.positioning, customInstructions) };
+    const updatedStrategy = { ...strategy, positioning: appendCustom(strategy.positioning, [domainDirective, customInstructions].filter(Boolean).join(' ')) };
     addLog('Rebuilding with your instructions…');
     try {
       const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
-        agentRunId: runId, careerProfile: profile, jobDescription, strategy: updatedStrategy, domainId: selectedDomainId,
+        agentRunId: runId, careerProfile: profile, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId,
       });
       addLog(`Build complete — match score ${matchScore}%`);
       const v = await getResumeVersion(uid, versionId);
@@ -287,7 +288,7 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
   /* ============================= EXISTING-RESUME PIPELINE ============================= */
   async function runTailorPipeline() {
     if (!jdText.trim() || !baseResume) return;
-    setError(''); setLoading(true); setStep('build'); resetBuildState();
+    setError(''); setLoading(true); resetBuildState();
 
     try {
       addLog(BUILD_STAGES.existing[0]); advanceStage();
@@ -303,7 +304,7 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
       addLog(BUILD_STAGES.existing[2]); advanceStage();
       await generateTailoredVersion(baseResume, customInstructions.trim() ? [customInstructions.trim()] : []);
       advanceStage();
-      setStep('review'); setReviewTab('resume');
+      setReviewTab('resume');
     } catch (err) {
       console.error(err);
       addLog(`Failed: ${err.message}`);
@@ -351,30 +352,33 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
     if (rebuildSections.summary) parts.push('Completely rewrite the Professional Summary from scratch — do not reuse any previous phrasing. Lead with the strongest, most JD-relevant positioning.');
     if (rebuildSections.experience) parts.push('Completely rewrite every Experience bullet from scratch — restructure, re-order and re-word aggressively for maximum JD alignment, while keeping every claim truthful to the source evidence.');
     if (selectedKeywords.length) parts.push(`Naturally incorporate these missing keywords wherever the candidate's real evidence supports them: ${selectedKeywords.join(', ')}.`);
-    if (rebuildNotes.trim()) parts.push(rebuildNotes.trim());
+    if (customInstructions.trim()) parts.push(customInstructions.trim());
     return parts.join(' ');
   }
 
   async function handleAggressiveRebuild() {
     const directive = buildRebuildDirective();
-    if (!directive) { setError('Select a section, a keyword, or add an instruction before rebuilding.'); return; }
-    setRegenerating(true); setError('');
+    setRegenerating(true); setError(''); setBuildLog([]);
+    addLog('Reading your selections…');
     try {
       if (mode === 'scratch') {
         if (!strategy || !jobDescription || !runId || !profile) throw new Error('Missing run context — start a new run.');
-        const updatedStrategy = { ...strategy, positioning: appendCustom(strategy.positioning, directive) };
+        addLog('Rewriting bullets against the JD…');
+        const updatedStrategy = { ...strategy, positioning: appendCustom(strategy.positioning, [domainDirective, directive].filter(Boolean).join(' ')) };
         const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
-          agentRunId: runId, careerProfile: profile, jobDescription, strategy: updatedStrategy, domainId: selectedDomainId,
+          agentRunId: runId, careerProfile: profile, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId,
         });
+        addLog('Scoring match…');
         const v = await getResumeVersion(uid, versionId);
         setVersion(v);
         if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
         notify?.({ kind: 'good', title: 'Resume rebuilt', detail: `ATS match score: ${matchScore}%` });
       } else {
         if (!baseResume) throw new Error('Base resume missing — start a new run.');
-        await generateTailoredVersion(baseResume, [directive], 'aggressive');
+        addLog('Rewriting bullets against the JD…');
+        await generateTailoredVersion(baseResume, directive ? [directive] : [], 'aggressive');
       }
-      setSelectedKeywords([]); setRebuildNotes('');
+      setSelectedKeywords([]);
     } catch (err) {
       console.error(err);
       setError(err.message || 'Rebuild failed. Please try again.');
@@ -462,19 +466,53 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
   }
 
   function handleReset() {
-    setStep('setup'); setRunId(null); resetBuildState();
+    setRunId(null); resetBuildState();
     setJdText(''); setJdMode('text'); setImgStatus(null); setCustomInstructions('');
     setBaseResumeId(''); setTailoringLevel('Balanced');
+    setSelectedKeywords([]);
+  }
+
+  /* ============================= CUSTOM DOMAINS ============================= */
+  // Accepts a comma/newline separated paste and folds it into de-duped chips.
+  function absorbKeywordPaste() {
+    const parsed = newDomainKwRaw.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+    if (!parsed.length) return;
+    setNewDomainKws(list => [...new Set([...list, ...parsed])]);
+    setNewDomainKwRaw('');
+  }
+
+  async function handleCreateCustomDomain() {
+    const merged = [...new Set([...newDomainKws, ...newDomainKwRaw.split(/[,\n]/).map(s => s.trim()).filter(Boolean)])];
+    if (!newDomainName.trim()) { setError('Give the custom domain a name.'); return; }
+    if (!merged.length) { setError('Add at least one keyword so the Agent knows what this domain means.'); return; }
+    setError(''); setCreatingDomain(true);
+    try {
+      const parent = domains.find(d => d.id === newDomainParent);
+      const created = await createCustomDomain(uid, {
+        name: newDomainName.trim(),
+        parentDomainId: parent?.id || null,
+        parentDomainName: parent?.name || '',
+        keywords: merged,
+      });
+      setCustomDomains(list => [...list, created]);
+      setSelectedDomainId(created.id);
+      setNewDomainName(''); setNewDomainParent(''); setNewDomainKws([]); setNewDomainKwRaw('');
+      setCreateDomainOpen(false);
+      notify?.({ kind: 'good', title: 'Custom domain created', detail: created.name });
+    } catch (err) {
+      console.error(err);
+      setError('Could not create the domain. Please try again.');
+    }
+    setCreatingDomain(false);
   }
 
   const score = version?.matchScore;
   const scoreTier = score >= 90 ? 'excellent' : score >= 75 ? 'good' : score >= 60 ? 'fair' : 'weak';
   const scoreTierLabel = score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 60 ? 'Fair' : 'Needs work';
+  const profileIncomplete = mode === 'scratch' && profile && !(profile.experience?.length);
   const canAdvance = mode === 'scratch'
-    ? Boolean(jdText.trim() && selectedDomainId && profileId)
+    ? Boolean(jdText.trim() && selectedDomainId && profileId && !profileIncomplete)
     : Boolean(jdText.trim() && baseResumeId);
-  const stages = BUILD_STAGES[mode];
-  const progressPct = buildDone ? 100 : Math.min(95, Math.round((buildStageIdx / stages.length) * 100));
   const highlightTerms = version?.content?.highlights?.length ? version.content.highlights : (mode === 'scratch' ? (strategy?.skillPriority || []) : []);
 
   // Skill keywords the JD asks for that don't yet appear anywhere in the generated resume.
@@ -482,438 +520,410 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
     if (!version?.content) return [];
     const text = flattenResume(version.content).toLowerCase();
     const pool = mode === 'scratch'
-      ? [...(version.requirementMatches || []).map(m => m.name), ...(strategy?.skillPriority || []), ...(jobDescription?.requiredSkills || [])]
-      : [...(jdIntel?.matchMatrix || []).map(m => m.term)];
-    return [...new Set(pool.filter(Boolean).map(String))]
-      .filter(k => k.trim() && !text.includes(k.toLowerCase()))
+      ? [...(version.requirementMatches || []).map(m => ({ term: m.name, important: ['Critical', 'High'].includes(m.importance) })),
+         ...(strategy?.skillPriority || []).map(s => ({ term: s, important: true }))]
+      : (jdIntel?.matchMatrix || []).map(m => ({ term: m.term, important: m.status === 'missing' }));
+    const seen = new Set();
+    return pool
+      .filter(k => k.term && typeof k.term === 'string')
+      .filter(k => { const key = k.term.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; })
+      .filter(k => !text.includes(k.term.toLowerCase()))
       .slice(0, 24);
-  }, [version, strategy, jobDescription, jdIntel, mode]);
+  }, [version, strategy, jdIntel, mode]);
+
+  const strongMissing = missingKeywords.filter(k => k.important);
+  const niceMissing = missingKeywords.filter(k => !k.important);
+
+  // JD Match rows, normalised across both pipelines
+  const jdMatchRows = mode === 'scratch'
+    ? (version?.requirementMatches || []).map(m => ({ term: m.name, level: m.evidenceStrength, meta: `${m.importance} · ${m.mentionCount}× in JD` }))
+    : (jdIntel?.matchMatrix || []).map(m => ({ term: m.term, level: m.status === 'strong' ? 'STRONG' : m.status === 'partial' ? 'WEAK' : 'MISSING', meta: '' }));
+
+  const selectStatus = mode === 'scratch' ? 'From scratch' : 'Tailoring';
 
   return (
     <section>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
         <h1 className="page-title">✦ Build / Tailor Resume</h1>
-        {step !== 'setup' && <button className="btn btn-ghost btn-sm" onClick={handleReset}>← New run</button>}
+        {version && <button className="btn btn-ghost btn-sm" onClick={handleReset}>← New run</button>}
       </div>
-      <p className="page-sub">One flow for building from scratch or tailoring an existing resume.</p>
+      <p className="page-sub">Configure on the left, see the result on the right. Nothing navigates away.</p>
 
-      {step === 'setup' && <ModeToggle mode={mode} onChange={setMode} />}
-      <StepNav currentStep={step} />
-
-      {/* ========== STEP 1: SETUP ========== */}
-      {step === 'setup' && (
-        <div style={{ maxWidth: 640 }}>
-          {error && <div className="error-box" style={{ marginBottom: 14 }}>{error}</div>}
-
-          {mode === 'scratch' ? (
-            <>
-              <div className="panel" style={{ marginBottom: 14 }}>
-                <div className="panel-head"><h2>Career profile</h2></div>
-                {profiles.length === 0 ? <div className="empty">No career profiles found.</div> : (
-                  <div className="profile-switcher" style={{ position: 'relative' }}>
-                    <button className="profile-switcher-btn" onClick={() => setProfileSwitcherOpen(v => !v)}>
-                      <div className="profile-avatar">{(profile?.name || 'P').charAt(0).toUpperCase()}</div>
-                      <div style={{ textAlign: 'left' }}>
-                        <div className="profile-switcher-name">
-                          {profile?.name || '— Choose a profile —'}
-                          {profile?.isDefault && <span className="badge badge-violet" style={{ marginLeft: 8 }}>Default</span>}
-                        </div>
-                        {profile && <div className="profile-switcher-meta">{profile.experience?.length || 0} experience · {profile.skills?.length || 0} skills</div>}
-                      </div>
-                      <span className="profile-switcher-chevron">{profileSwitcherOpen ? '▾' : '▸'}</span>
-                    </button>
-                    {profileSwitcherOpen && (
-                      <div className="profile-switcher-menu">
-                        {profiles.map(p => (
-                          <div key={p.id} className={`profile-switcher-item${profileId === p.id ? ' active' : ''}`}
-                            onClick={() => { setProfileId(p.id); setProfileSwitcherOpen(false); }}>
-                            <div className="profile-avatar" style={{ width: 28, height: 28, fontSize: 12, borderRadius: 7 }}>{p.name.charAt(0).toUpperCase()}</div>
-                            <div>
-                              <div className="profile-switcher-item-name">{p.name}{p.isDefault && <span className="badge badge-violet" style={{ marginLeft: 6 }}>Default</span>}</div>
-                              <div className="profile-switcher-item-meta">{p.experience?.length || 0} experience entries · {p.skills?.length || 0} skills</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="panel" style={{ marginBottom: 14 }}>
-                <div className="panel-head"><h2>Target domain</h2></div>
-                {domains.length === 0 ? (
-                  <div className="empty">No published domains yet — ask your admin to add one.</div>
-                ) : (
-                  <div className="profile-switcher" style={{ position: 'relative' }}>
-                    <button className="profile-switcher-btn" onClick={() => setDomainSwitcherOpen(v => !v)}>
-                      <div className="domain-card-icon" style={{ width: 38, height: 38, borderRadius: 10, fontSize: 15 }}>◆</div>
-                      <div style={{ textAlign: 'left' }}>
-                        <div className="profile-switcher-name">{domains.find(d => d.id === selectedDomainId)?.name || '— Choose a domain —'}</div>
-                        {domains.find(d => d.id === selectedDomainId)?.summary && (
-                          <div className="profile-switcher-meta">{domains.find(d => d.id === selectedDomainId).summary}</div>
-                        )}
-                      </div>
-                      <span className="profile-switcher-chevron">{domainSwitcherOpen ? '▾' : '▸'}</span>
-                    </button>
-                    {domainSwitcherOpen && (
-                      <div className="profile-switcher-menu">
-                        {domains.map(d => (
-                          <div key={d.id} className={`profile-switcher-item${selectedDomainId === d.id ? ' active' : ''}`}
-                            onClick={() => { setSelectedDomainId(d.id); setDomainSwitcherOpen(false); }}>
-                            <div className="domain-card-icon" style={{ width: 28, height: 28, fontSize: 12, borderRadius: 7 }}>◆</div>
-                            <div>
-                              <div className="profile-switcher-item-name">{d.name}</div>
-                              {d.summary && <div className="profile-switcher-item-meta">{d.summary}</div>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <JdInput jdText={jdText} setJdText={setJdText} jdMode={jdMode} setJdMode={setJdMode} imgStatus={imgStatus} setImgStatus={setImgStatus} />
-
-              <div className="panel" style={{ marginBottom: 14 }}>
-                <div className="panel-head"><h2>Custom instructions <span className="count">(optional)</span></h2></div>
-                <textarea rows={2} value={customInstructions} onChange={e => setCustomInstructions(e.target.value)} placeholder="e.g. Emphasize leadership, keep it to one page, lead with the Microsoft role…" />
-              </div>
-
-              <button className="btn btn-primary" style={{ width: '100%' }} disabled={loading || !canAdvance} onClick={runScratchPipeline}>
-                {loading ? 'Building…' : 'Build Resume →'}
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="panel" style={{ marginBottom: 14 }}>
-                <div className="panel-head"><h2>Base resume</h2></div>
-                {resumes.length > 0 ? (
-                  <div className="field" style={{ marginBottom: 0 }}>
-                    <select value={baseResumeId} onChange={e => setBaseResumeId(e.target.value)}>
-                      <option value="">— Choose a resume —</option>
-                      {resumes.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-                    </select>
-                    {baseResume && <div className="field-hint">{(baseResume.text?.length || 0).toLocaleString()} chars{baseResume.fileName ? ` · ${baseResume.fileName}` : ''}</div>}
-                  </div>
-                ) : (
-                  <div className="empty">No resumes in your library yet — add one from the Resumes page first.</div>
-                )}
-              </div>
-
-              <JdInput jdText={jdText} setJdText={setJdText} jdMode={jdMode} setJdMode={setJdMode} imgStatus={imgStatus} setImgStatus={setImgStatus} />
-
-              <div className="panel" style={{ marginBottom: 14 }}>
-                <div className="panel-head"><h2>Tailoring level</h2></div>
-                <div className="seg-ctrl">
-                  {LEVELS.map(l => <button key={l} className={tailoringLevel === l ? 'active' : ''} onClick={() => setTailoringLevel(l)}>{l}</button>)}
-                </div>
-                <div className="field-hint">
-                  {tailoringLevel === 'Conservative' && 'Light touch — only changes phrasing where it clearly helps.'}
-                  {tailoringLevel === 'Balanced' && 'Moderate rewrite — reworks phrasing where it clearly helps. Recommended.'}
-                  {tailoringLevel === 'Aggressive' && 'Maximum rewrite — restructures freely to match the JD.'}
-                </div>
-              </div>
-
-              <div className="panel" style={{ marginBottom: 14 }}>
-                <div className="panel-head"><h2>Custom instructions <span className="count">(optional)</span></h2></div>
-                <textarea rows={2} value={customInstructions} onChange={e => setCustomInstructions(e.target.value)} placeholder="e.g. Emphasize leadership, keep it to one page, work in the word 'distributed systems'…" />
-              </div>
-
-              <button className="btn btn-primary" style={{ width: '100%' }} disabled={loading || !canAdvance} onClick={runTailorPipeline}>
-                {loading ? 'Tailoring…' : 'Analyze & Tailor →'}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ========== STEP 2: BUILD ========== */}
-      {step === 'build' && (
+      <div className="ws-split">
+        {/* ============ LEFT: SELECT ============ */}
         <div>
-          <div className="build-loader">
-            <div className="build-loader-top">
-              <div className="build-loader-spinner" />
-              <div style={{ flex: 1 }}>
-                <div className="build-loader-title">{buildDone ? 'Done!' : (stages[Math.min(buildStageIdx, stages.length - 1)] || 'Working…')}</div>
-                <div className="build-loader-sub">{buildDone ? 'Your resume is ready to review.' : 'This usually takes 20–30 seconds — feel free to wait here.'}</div>
-              </div>
-              {buildDone && <span className="badge badge-green">✓ Complete</span>}
-            </div>
-            <div className="progress-bar" style={{ marginTop: 12 }}><div className={`progress-fill${buildDone ? ' green' : ''}`} style={{ width: `${progressPct}%`, transition: 'width .5s' }} /></div>
+          <div className="ws-col-head">
+            <span className="ws-col-num">01 · select</span>
+            <span className="ws-col-status">{selectStatus}</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 18, alignItems: 'start', marginTop: 16 }}>
-            <div className="panel">
-              <div className="panel-head"><h2>Live Activity</h2></div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {buildLog.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12.6, color: 'var(--text-secondary)' }}>
-                    <span style={{ color: 'var(--success)', flexShrink: 0, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{item.time}</span>
-                    <span>{item.text}</span>
-                  </div>
-                ))}
-              </div>
-              {error && <div className="error-box" style={{ marginTop: 14 }}>{error}</div>}
-            </div>
+          <div className="opt-scroll">
+            {error && <div className="error-box" style={{ marginBottom: 10 }}>{error}</div>}
 
-            <div>
-              {mode === 'scratch' ? (
-                <>
-                  <div className="panel">
-                    <div className="panel-head"><h2>Agent Findings</h2></div>
-                    {findings ? (
-                      <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 650, marginBottom: 14 }}>
-                          Role Match
-                          <span className={`badge badge-${findings.roleMatch === 'Strong' ? 'green' : findings.roleMatch === 'Good' ? 'violet' : 'amber'}`}>{findings.roleMatch}</span>
-                        </div>
-                        {findings.strongestEvidence?.length > 0 && (
-                          <>
-                            <div className="field-label" style={{ marginBottom: 6 }}>Strongest evidence</div>
-                            <div className="chips" style={{ marginBottom: 4 }}>{findings.strongestEvidence.map(e => <div key={e} className="chip match">{e}</div>)}</div>
-                          </>
-                        )}
-                      </>
-                    ) : <div className="loading"><span className="spinner" /> Analyzing…</div>}
-                  </div>
-                  {strategy && buildDone && (
-                    <div className="strategy-mini">
-                      <div className="k">Positioning</div>
-                      <div className="v">{strategy.positioning}</div>
-                      <div className="k">Skill Priority</div>
-                      <div className="v">{(strategy.skillPriority || []).slice(0, 8).join(', ') || '—'}</div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="panel">
-                  <div className="panel-head"><h2>JD Match</h2></div>
-                  {jdIntel?.matchMatrix?.length > 0 ? (
-                    jdIntel.matchMatrix.slice(0, 8).map(m => {
-                      const strength = m.status === 'strong' ? 'STRONG' : m.status === 'partial' ? 'WEAK' : 'MISSING';
-                      return <div key={m.term} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.6, marginBottom: 6 }}>{m.term}<span className={`req-strength ${strength}`}>{strength}</span></div>;
-                    })
-                  ) : buildDone ? <div className="empty">No requirement data available.</div> : <div className="loading"><span className="spinner" /> Analyzing…</div>}
-                </div>
-              )}
-
-              {buildDone && (
-                <div className="panel">
-                  <div className="panel-head"><h2>Not quite right?</h2></div>
-                  <p className="field-hint" style={{ marginBottom: 10 }}>Add or edit instructions, then regenerate.</p>
-                  <textarea rows={2} value={customInstructions} onChange={e => setCustomInstructions(e.target.value)} placeholder="e.g. Emphasize leadership more…" style={{ marginBottom: 10 }} />
-                  <button className="btn btn-sm btn-primary btn-full" disabled={regenerating} onClick={mode === 'scratch' ? handleRegenerateScratch : handleRetailor}>
-                    {regenerating ? 'Regenerating…' : '↻ Apply & Regenerate'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {buildDone && (
-            <div className="toolbar" style={{ justifyContent: 'flex-start', marginTop: 16 }}>
-              <button className="btn btn-primary" onClick={() => setStep('review')}>Continue to Review →</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ========== STEP 3: REVIEW & EXPORT ========== */}
-      {step === 'review' && version && (
-        <div>
-          {score != null && (
-            <div className="ats-scorecard" style={{ marginBottom: 18 }}>
-              <div className={`ats-scorecard-num ats-tier-${scoreTier}`}>{score}</div>
-              <div className="ats-scorecard-body">
-                <div className="ats-scorecard-label">ATS Match Score</div>
-                <div className={`ats-scorecard-tier ats-tier-${scoreTier}`}>{scoreTierLabel}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => setStep('build')}>← Back to Build</button>
-              </div>
-            </div>
-          )}
-
-          <div className="review-export-grid">
-            <div>
-              <div className="tabs">
-                {[['resume', 'Preview'], ['changes', 'Changes'], ['matches', 'JD Match'], ['flags', 'Quality Check']].map(([t, label]) => {
-                  const badge = mode === 'scratch'
-                    ? (t === 'flags' ? (version.flags || []).filter(f => f.status === 'needs_review').length : t === 'changes' ? (version.changes || []).filter(c => c.status === 'pending').length : 0)
-                    : (t === 'changes' ? diffOps.length : 0);
-                  return (
-                    <button key={t} className={`tab${reviewTab === t ? ' active' : ''}`} onClick={() => setReviewTab(t)}>
-                      {label}{badge > 0 && <span className="nav-badge" style={{ marginLeft: 5 }}>{badge}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {reviewTab === 'resume' && (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={showHighlights} onChange={e => setShowHighlights(e.target.checked)} style={{ width: 'auto' }} />
-                      Highlight JD-matched keywords
-                    </label>
-                  </div>
-                  <div className="doc"><ResumePreview resume={{ ...version.content, highlights: highlightTerms }} showHighlights={showHighlights} /></div>
-                </>
-              )}
-
-              {reviewTab === 'changes' && mode === 'scratch' && (
-                <div className="panel">
-                  <div className="panel-head"><h2>Changes ({(version.changes || []).length})</h2><button className="btn btn-sm btn-ghost" onClick={handleAcceptAll}>Accept all</button></div>
-                  {(version.changes || []).map(c => (
-                    <div key={c.id} style={{ padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 8 }}>{c.section}</div>
-                      <div className="diff-grid">
-                        <div className="diff-col-head">Before</div><div className="diff-col-head">After</div>
-                        <div className="diff-cell diff-removed">{c.beforeText}</div><div className="diff-cell diff-added">{c.afterText}</div>
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '6px 0 8px', fontStyle: 'italic' }}>{c.rationale}</div>
-                      {c.status === 'pending' && <div style={{ display: 'flex', gap: 6 }}><button className="btn btn-sm btn-primary" onClick={() => handleChangeStatus(c.id, 'accepted')}>Accept</button><button className="btn btn-sm btn-ghost" onClick={() => handleChangeStatus(c.id, 'reverted')}>Revert</button></div>}
-                      {c.status !== 'pending' && <span style={{ fontSize: 11, fontWeight: 600, color: c.status === 'accepted' ? 'var(--success)' : 'var(--text-muted)' }}>{c.status}</span>}
-                    </div>
-                  ))}
-                  {!(version.changes?.length) && <div className="empty">No changes to review</div>}
-                </div>
-              )}
-
-              {reviewTab === 'changes' && mode === 'existing' && (
-                <div className="panel">
-                  <div className="panel-head"><h2>Line-by-line diff</h2></div>
-                  <p className="field-hint" style={{ marginBottom: 12 }}>Comparing your base resume against the tailored version.</p>
-                  <div className="diff-grid">
-                    <div className="diff-col-head">Before</div><div className="diff-col-head">After</div>
-                    {diffOps.map((op, i) => (
-                      <React.Fragment key={i}>
-                        <div className={`diff-cell ${op.type === 'removed' ? 'diff-removed' : 'diff-blank'}`}>{op.left && (op.left.startsWith('## ') ? <strong>{op.left.slice(3)}</strong> : op.left)}</div>
-                        <div className={`diff-cell ${op.type === 'added' ? 'diff-added' : 'diff-blank'}`}>{op.right && (op.right.startsWith('## ') ? <strong>{op.right.slice(3)}</strong> : op.right)}</div>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  {!diffOps.length && <div className="empty">No differences detected.</div>}
-                </div>
-              )}
-
-              {reviewTab === 'matches' && (
-                <div className="panel">
-                  <div className="panel-head"><h2>JD Match</h2></div>
-                  {mode === 'scratch' ? (
-                    <>
-                      {(version.requirementMatches || []).map(m => (
-                        <div key={m.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                          <div><div style={{ fontWeight: 500 }}>{m.name}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.importance} · {m.mentionCount}× in JD</div></div>
-                          <span className={`req-strength ${m.evidenceStrength}`}>{m.evidenceStrength}</span>
-                        </div>
-                      ))}
-                      {!(version.requirementMatches?.length) && <div className="empty">No requirement data available</div>}
-                    </>
-                  ) : (
-                    <>
-                      {(jdIntel?.matchMatrix || []).map(m => {
-                        const strength = m.status === 'strong' ? 'STRONG' : m.status === 'partial' ? 'WEAK' : 'MISSING';
-                        return <div key={m.term} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}><div style={{ fontWeight: 500 }}>{m.term}</div><span className={`req-strength ${strength}`}>{strength}</span></div>;
-                      })}
-                      {!(jdIntel?.matchMatrix?.length) && <div className="empty">No requirement data available for this JD.</div>}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {reviewTab === 'flags' && (
-                <div className="panel">
-                  <div className="panel-head"><h2>Resume Quality Check</h2></div>
-                  {mode === 'scratch' ? (
-                    <>
-                      {(version.flags || []).map(f => (
-                        <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                          <div><div style={{ fontWeight: 500 }}>{f.claimText}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{f.sourceRef || 'No source reference'}</div></div>
-                          {f.status === 'needs_review' ? <button className="btn btn-sm btn-primary" onClick={() => handleVerifyFlag(f.id)}>Verify ✓</button> : <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>Verified</span>}
-                        </div>
-                      ))}
-                      {!(version.flags?.length) && <div className="empty" style={{ color: 'var(--success)', fontWeight: 500 }}>✓ No flags — all claims trace to your profile</div>}
-                    </>
-                  ) : <div className="empty">Truthfulness verification runs on Agent-built resumes (Build from scratch). Tailored resumes rewrite your existing text directly.</div>}
-                </div>
-              )}
-            </div>
-
-            {/* Export sidebar — always visible alongside Review, no separate step */}
-            <div>
-              <div className="panel">
-                <div className="panel-head"><h2>Refine & Rebuild</h2></div>
-                <p className="field-hint" style={{ marginBottom: 10 }}>Aggressively regenerate sections and pull in keywords the resume is missing.</p>
-
-                <div className="field-label" style={{ marginBottom: 6 }}>Rebuild sections</div>
-                <label className="field-check" style={{ marginBottom: 4 }}>
-                  <input type="checkbox" checked={rebuildSections.summary} onChange={e => setRebuildSections(s => ({ ...s, summary: e.target.checked }))} style={{ width: 'auto', accentColor: 'var(--primary)' }} />
-                  Summary
-                </label>
-                <label className="field-check" style={{ marginBottom: 12 }}>
-                  <input type="checkbox" checked={rebuildSections.experience} onChange={e => setRebuildSections(s => ({ ...s, experience: e.target.checked }))} style={{ width: 'auto', accentColor: 'var(--primary)' }} />
-                  Experience
-                </label>
-
-                <div className="field-label" style={{ marginBottom: 6 }}>
-                  Missing keywords {missingKeywords.length > 0 && <span className="count">({selectedKeywords.length}/{missingKeywords.length} selected)</span>}
-                </div>
-                {missingKeywords.length === 0 ? (
-                  <div style={{ fontSize: 11.5, color: 'var(--success)', fontWeight: 500, marginBottom: 12 }}>✓ Every tracked keyword already appears in the resume</div>
-                ) : (
-                  <>
-                    <div className="chip-row" style={{ marginBottom: 8 }}>
-                      {missingKeywords.map(k => {
-                        const on = selectedKeywords.includes(k);
-                        return (
-                          <div key={k} className="chip" style={{ cursor: 'pointer', background: on ? 'var(--primary-subtle)' : 'var(--bg)', color: on ? 'var(--primary)' : 'var(--text-secondary)', border: `1px solid ${on ? 'var(--primary)' : 'var(--border)'}` }}
-                            onClick={() => setSelectedKeywords(list => on ? list.filter(x => x !== k) : [...list, k])}>
-                            {on ? '✓ ' : '+ '}{k}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <button className="btn btn-xs btn-ghost" style={{ marginBottom: 12 }}
-                      onClick={() => setSelectedKeywords(selectedKeywords.length === missingKeywords.length ? [] : [...missingKeywords])}>
-                      {selectedKeywords.length === missingKeywords.length ? 'Clear all' : 'Select all'}
-                    </button>
-                  </>
-                )}
-
-                <div className="field">
-                  <label className="field-label">Extra instructions</label>
-                  <textarea rows={2} value={rebuildNotes} onChange={e => setRebuildNotes(e.target.value)} placeholder="e.g. Lead with the Microsoft role, cut it to one page…" />
-                </div>
-
-                {error && <div className="error-box" style={{ marginBottom: 10 }}>{error}</div>}
-                <button className="btn btn-primary btn-full" disabled={regenerating} onClick={handleAggressiveRebuild}>
-                  {regenerating ? 'Rebuilding…' : '↻ Rebuild Resume'}
+            {/* ---- Starting point ---- */}
+            <OptBlock title="Starting point" summary={selectStatus}>
+              <div className="start-tiles">
+                <button className={`start-tile${mode === 'existing' ? ' selected' : ''}`} onClick={() => setMode('existing')}>
+                  <div className="start-tile-title">Tailor existing</div>
+                  <div className="start-tile-desc">Rewrite a resume you already have</div>
+                </button>
+                <button className={`start-tile${mode === 'scratch' ? ' selected' : ''}`} onClick={() => setMode('scratch')}>
+                  <div className="start-tile-title">Build from scratch</div>
+                  <div className="start-tile-desc">Generate from your Career Profile</div>
                 </button>
               </div>
 
-              <div className="panel">
-                <div className="panel-head"><h2>Export</h2></div>
-                <div className="field">
-                  <label className="field-label">Format</label>
-                  <div className="seg-ctrl" style={{ width: '100%' }}>
-                    {['pdf', 'docx'].map(f => <button key={f} className={exportFormat === f ? 'active' : ''} onClick={() => setExportFormat(f)}>{f.toUpperCase()}</button>)}
+              {mode === 'existing' ? (
+                <div style={{ marginTop: 12 }}>
+                  <label className="field-label">Base resume</label>
+                  {resumes.length > 0 ? (
+                    <>
+                      <select value={baseResumeId} onChange={e => setBaseResumeId(e.target.value)}>
+                        <option value="">— Choose a resume —</option>
+                        {resumes.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                      </select>
+                      {baseResume && <div className="field-hint">{(baseResume.text?.length || 0).toLocaleString()} chars{baseResume.fileName ? ` · ${baseResume.fileName}` : ''}</div>}
+                    </>
+                  ) : (
+                    <div className="ws-warn">
+                      No resumes in your library yet.
+                      <a onClick={() => setView?.('library')}>Add one →</a>
+                    </div>
+                  )}
+                  <div style={{ marginTop: 10 }}>
+                    <label className="field-label">Tailoring level</label>
+                    <div className="seg-ctrl">
+                      {LEVELS.map(l => <button key={l} className={tailoringLevel === l ? 'active' : ''} onClick={() => setTailoringLevel(l)}>{l}</button>)}
+                    </div>
                   </div>
                 </div>
-                <button className="btn btn-primary btn-full" style={{ marginBottom: 8 }} onClick={() => handleDownload(exportFormat)}>⇩ Download {exportFormat.toUpperCase()}</button>
-                <button className="btn btn-ghost btn-full" style={{ marginBottom: 8 }} onClick={handleGenerateCoverLetter}>✎ Generate Cover Letter</button>
-                <button className="btn btn-ghost btn-full" onClick={openEmailDraft}>✉ Draft Email (Gmail)</button>
+              ) : (
+                <div className="field-hint" style={{ marginTop: 12 }}>
+                  Building from scratch uses your <strong>Career Profile</strong> as the only source of facts. No base resume needed.
+                </div>
+              )}
+            </OptBlock>
+
+            {/* ---- Career profile (scratch only) ---- */}
+            {mode === 'scratch' && (
+              <OptBlock title="Career profile" summary={profile?.name}>
+                {profiles.length === 0 ? (
+                  <div className="ws-warn">No career profiles found.<a onClick={() => setView?.('careerprofile')}>Create one →</a></div>
+                ) : (
+                  <>
+                    <select value={profileId} onChange={e => setProfileId(e.target.value)}>
+                      {profiles.map(p => <option key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (Default)' : ''}</option>)}
+                    </select>
+                    {profile && (
+                      <div className="field-hint">{profile.experience?.length || 0} experience · {profile.education?.length || 0} education · {profile.skills?.length || 0} skills</div>
+                    )}
+                    {profileIncomplete && (
+                      <div className="ws-warn">
+                        This profile has no experience entries, so nothing can be generated.
+                        <a onClick={() => setView?.('careerprofile')}>Fix →</a>
+                      </div>
+                    )}
+                  </>
+                )}
+              </OptBlock>
+            )}
+
+            {/* ---- Target domain (scratch only) ---- */}
+            {mode === 'scratch' && (
+              <OptBlock title="Target domain" summary={selectedDomain?.name}>
+                <input className="domain-search" type="text" placeholder="Search domains…" value={domainQuery} onChange={e => setDomainQuery(e.target.value)} />
+                {filteredDomains.length > 0 ? (
+                  <div className="domain-list">
+                    {filteredDomains.map(d => (
+                      <div key={d.id} className={`domain-row${selectedDomainId === d.id ? ' selected' : ''}`} onClick={() => setSelectedDomainId(d.id)}>
+                        <div className="radio-dot" />
+                        <div style={{ minWidth: 0 }}>
+                          <div className="domain-row-name">
+                            {d.name}
+                            {d.isCustom && <span className="badge badge-neutral" style={{ marginLeft: 6 }}>Custom</span>}
+                          </div>
+                          {d.summary && <div className="domain-row-meta">{d.summary}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="field-hint">No domains match “{domainQuery}”. Create one below.</div>
+                )}
+
+                {!createDomainOpen ? (
+                  <button className="inline-create-toggle" onClick={() => setCreateDomainOpen(true)}>+ Create a custom domain</button>
+                ) : (
+                  <div className="inline-create">
+                    <div className="field">
+                      <label className="field-label">Name</label>
+                      <input type="text" placeholder="e.g. Platform Engineering" value={newDomainName} onChange={e => setNewDomainName(e.target.value)} />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Parent domain <span className="count">(optional)</span></label>
+                      <select value={newDomainParent} onChange={e => setNewDomainParent(e.target.value)}>
+                        <option value="">— None —</option>
+                        {domains.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Keywords</label>
+                      <textarea rows={3} placeholder="Paste a list — commas or one per line" value={newDomainKwRaw}
+                        onChange={e => setNewDomainKwRaw(e.target.value)}
+                        onBlur={() => absorbKeywordPaste()}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); absorbKeywordPaste(); } }} />
+                      <div className="field-hint">Comma or newline separated. Duplicates are removed automatically.</div>
+                    </div>
+                    {newDomainKws.length > 0 && (
+                      <div className="kw-chips">
+                        {newDomainKws.map(k => (
+                          <span key={k} className="kw-chip">{k}<span className="x" onClick={() => setNewDomainKws(list => list.filter(x => x !== k))}>✕</span></span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-sm btn-primary" disabled={creatingDomain} onClick={handleCreateCustomDomain}>
+                        {creatingDomain ? 'Creating…' : 'Create domain'}
+                      </button>
+                      <button className="btn btn-sm btn-ghost" onClick={() => setCreateDomainOpen(false)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </OptBlock>
+            )}
+
+            {/* ---- Job description ---- */}
+            <OptBlock title="Job description" summary={jdText.trim() ? `${jdText.trim().length.toLocaleString()} chars` : 'Empty'}>
+              <JdInput jdText={jdText} setJdText={setJdText} jdMode={jdMode} setJdMode={setJdMode} imgStatus={imgStatus} setImgStatus={setImgStatus} />
+            </OptBlock>
+
+            {/* ---- Improve match ---- */}
+            {version && missingKeywords.length > 0 && (
+              <OptBlock title="Improve match" summary={`${selectedKeywords.length}/${missingKeywords.length} selected`} defaultOpen={false}>
+                <p className="field-hint" style={{ marginBottom: 6 }}>Keywords the JD asks for that aren't in the current draft. Selected ones get woven in on the next generate, only where your evidence supports them.</p>
+                {strongMissing.length > 0 && (
+                  <>
+                    <div className="kw-group-label strong">Missing — strong impact</div>
+                    {strongMissing.map(k => (
+                      <label key={k.term} className="kw-check">
+                        <input type="checkbox" checked={selectedKeywords.includes(k.term)}
+                          onChange={() => setSelectedKeywords(l => l.includes(k.term) ? l.filter(x => x !== k.term) : [...l, k.term])} />
+                        {k.term}
+                      </label>
+                    ))}
+                  </>
+                )}
+                {niceMissing.length > 0 && (
+                  <>
+                    <div className="kw-group-label nice">Missing — nice to have</div>
+                    {niceMissing.map(k => (
+                      <label key={k.term} className="kw-check">
+                        <input type="checkbox" checked={selectedKeywords.includes(k.term)}
+                          onChange={() => setSelectedKeywords(l => l.includes(k.term) ? l.filter(x => x !== k.term) : [...l, k.term])} />
+                        {k.term}
+                      </label>
+                    ))}
+                  </>
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <label className="field-check" style={{ margin: 0 }}>
+                    <input type="checkbox" checked={rebuildSections.summary} onChange={e => setRebuildSections(s => ({ ...s, summary: e.target.checked }))} style={{ width: 'auto', accentColor: 'var(--brand)' }} />
+                    Rebuild summary
+                  </label>
+                  <label className="field-check" style={{ margin: 0 }}>
+                    <input type="checkbox" checked={rebuildSections.experience} onChange={e => setRebuildSections(s => ({ ...s, experience: e.target.checked }))} style={{ width: 'auto', accentColor: 'var(--brand)' }} />
+                    Rebuild experience
+                  </label>
+                </div>
+              </OptBlock>
+            )}
+
+            {/* ---- Custom instructions ---- */}
+            <OptBlock title="Custom instructions" summary={customInstructions.trim() ? 'Set' : 'Optional'} defaultOpen={false}>
+              <textarea rows={3} value={customInstructions} onChange={e => setCustomInstructions(e.target.value)}
+                placeholder="e.g. Emphasize leadership, keep it to one page, lead with the Microsoft role…" />
+            </OptBlock>
+
+            <button className="btn btn-primary btn-full" style={{ marginTop: 4 }}
+              disabled={loading || regenerating || !canAdvance}
+              onClick={version ? handleAggressiveRebuild : (mode === 'scratch' ? runScratchPipeline : runTailorPipeline)}>
+              {loading || regenerating ? 'Generating…' : version ? '↻ Regenerate' : 'Generate Resume →'}
+            </button>
+            {!canAdvance && !loading && (
+              <div className="field-hint" style={{ marginTop: 6, textAlign: 'center' }}>
+                {profileIncomplete ? 'Add an experience entry to your Career Profile first.'
+                  : !jdText.trim() ? 'Paste a job description to continue.'
+                  : mode === 'scratch' ? 'Pick a career profile and a target domain.'
+                  : 'Pick a base resume.'}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ============ RIGHT: RESULT ============ */}
+        <div className="ws-result">
+          <div className="ws-col-head">
+            <span className="ws-col-num">02 · result</span>
+            <span className="ws-col-status">{version ? `${(version.content?.sections || []).length} sections` : 'Nothing generated yet'}</span>
+          </div>
+
+          <div className="result-shell">
+            {loading || regenerating ? (
+              <div className="gen-shell">
+                {buildLog.map((item, i) => (
+                  <div key={i} className={`gen-line${i < buildLog.length - 1 ? ' done' : ''}`} style={{ animationDelay: `${i * 60}ms` }}>
+                    {i < buildLog.length - 1 ? '✓ ' : '→ '}{item.text}
+                  </div>
+                ))}
+                {!buildLog.length && <div className="gen-line" style={{ opacity: 1 }}>Starting…</div>}
+              </div>
+            ) : !version ? (
+              <div className="gen-shell">
+                <div style={{ fontSize: 30, marginBottom: 10 }}>✦</div>
+                <div style={{ fontSize: 14, fontWeight: 650, color: 'var(--ink)', marginBottom: 4 }}>No result yet</div>
+                <p style={{ fontSize: 12.5, color: 'var(--ink-2)', maxWidth: 320, margin: '0 auto', lineHeight: 1.6 }}>
+                  Fill in the options on the left, then hit Generate. The result appears here without leaving this screen.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="result-head">
+                  <div>
+                    <div className={`result-score ats-tier-${scoreTier}`}>{score ?? '—'}</div>
+                    <div className="result-score-label">ATS match</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--ink)' }}>{scoreTierLabel}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{exportTitle()}</div>
+                  </div>
+                  <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={showHighlights} onChange={e => setShowHighlights(e.target.checked)} style={{ width: 'auto', accentColor: 'var(--brand)' }} />
+                    Highlight matches
+                  </label>
+                </div>
+
+                <div className="result-tabs">
+                  {[['resume', 'Preview'], ['changes', 'Changes'], ['matches', 'JD Match']].map(([t, label]) => {
+                    const badge = t === 'changes'
+                      ? (mode === 'scratch' ? (version.changes || []).length : diffOps.length)
+                      : t === 'matches' ? jdMatchRows.length : 0;
+                    return (
+                      <button key={t} className={`result-tab${reviewTab === t ? ' active' : ''}`} onClick={() => setReviewTab(t)}>
+                        {label}{badge > 0 && <span className="nav-badge" style={{ marginLeft: 5 }}>{badge}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="result-body">
+                  {reviewTab === 'resume' && (
+                    <div className="doc"><ResumePreview resume={{ ...version.content, highlights: highlightTerms }} showHighlights={showHighlights} /></div>
+                  )}
+
+                  {reviewTab === 'changes' && (
+                    <>
+                      {mode === 'scratch' ? (
+                        <>
+                          {(version.changes || []).map(c => (
+                            <div key={c.id} className="diff-block">
+                              <div className="diff-section-label">{c.section}</div>
+                              {c.beforeText && <div className="diff-line removed">{c.beforeText}</div>}
+                              <div className="diff-line added">{c.afterText}</div>
+                              {c.rationale && <div style={{ fontSize: 11, color: 'var(--ink-3)', fontStyle: 'italic', marginTop: 4 }}>{c.rationale}</div>}
+                            </div>
+                          ))}
+                          {!(version.changes?.length) && <div className="empty">No section-level changes recorded for this build.</div>}
+                          {version.changes?.length > 0 && (
+                            <div className="diff-count">{version.changes.length} change{version.changes.length === 1 ? '' : 's'} · nothing sent yet</div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="diff-section-label">Base resume → tailored</div>
+                          {diffOps.map((op, i) => (
+                            <div key={i} className="diff-block" style={{ marginBottom: 6 }}>
+                              {op.left && <div className="diff-line removed">{op.left.startsWith('## ') ? op.left.slice(3) : op.left}</div>}
+                              {op.right && <div className="diff-line added">{op.right.startsWith('## ') ? op.right.slice(3) : op.right}</div>}
+                            </div>
+                          ))}
+                          {!diffOps.length && <div className="empty">No differences detected.</div>}
+                          {diffOps.length > 0 && (
+                            <div className="diff-count">{diffOps.length} change{diffOps.length === 1 ? '' : 's'} · nothing sent yet</div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  {reviewTab === 'matches' && (
+                    <>
+                      {jdMatchRows.map(m => (
+                        <div key={m.term} className="jdm-row">
+                          <div>
+                            <div style={{ fontWeight: 500, color: 'var(--ink)' }}>{m.term}</div>
+                            {m.meta && <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{m.meta}</div>}
+                          </div>
+                          <span className={`jdm-pill ${String(m.level).toLowerCase()}`}>{m.level}</span>
+                        </div>
+                      ))}
+                      {!jdMatchRows.length && <div className="empty">No requirement data available for this JD.</div>}
+                      {(version.flags || []).filter(f => f.status === 'needs_review').length > 0 && (
+                        <div style={{ marginTop: 16 }}>
+                          <div className="diff-section-label">Quality check</div>
+                          {(version.flags || []).filter(f => f.status === 'needs_review').map(f => (
+                            <div key={f.id} className="jdm-row">
+                              <div style={{ fontSize: 12.4 }}>{f.claimText}</div>
+                              <button className="btn btn-xs btn-primary" onClick={() => handleVerifyFlag(f.id)}>Verify ✓</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* ---- Export receipt + actions ---- */}
+          {version && !loading && !regenerating && (
+            <div className="panel" style={{ marginTop: 14 }}>
+              <div className="receipt">
+                <div className="receipt-title">This export was built from</div>
+                {mode === 'scratch' ? (
+                  <>
+                    <div className="receipt-row"><span className="k">Career profile</span><span className="v">{profile?.name || '—'}</span></div>
+                    <div className="receipt-row"><span className="k">Target domain</span><span className="v">{selectedDomain?.name || '—'}</span></div>
+                  </>
+                ) : (
+                  <>
+                    <div className="receipt-row"><span className="k">Base resume</span><span className="v">{baseResume?.label || '—'}</span></div>
+                    <div className="receipt-row"><span className="k">Tailoring level</span><span className="v">{tailoringLevel}</span></div>
+                  </>
+                )}
+                <div className="receipt-row"><span className="k">Keywords matched</span><span className="v">{jdMatchRows.filter(m => m.level !== 'MISSING').length} of {jdMatchRows.length}</span></div>
+                <div className="receipt-row"><span className="k">JD length</span><span className="v">{jdText.trim().length.toLocaleString()} chars</span></div>
+              </div>
+
+              <div className="field">
+                <label className="field-label">Format</label>
+                <div className="seg-ctrl" style={{ width: '100%' }}>
+                  {['pdf', 'docx'].map(f => <button key={f} className={exportFormat === f ? 'active' : ''} onClick={() => setExportFormat(f)}>{f.toUpperCase()}</button>)}
+                </div>
+              </div>
+              <button className="btn btn-primary btn-full" style={{ marginBottom: 8 }} onClick={() => handleDownload(exportFormat)}>⇩ Download {exportFormat.toUpperCase()}</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={handleGenerateCoverLetter}>✎ Cover Letter</button>
+                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={openEmailDraft}>✉ Draft Email</button>
               </div>
 
               {coverLetterOpen && (
-                <div className="panel">
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
                   <div className="panel-head"><h2>Cover Letter</h2><button className="btn btn-xs btn-ghost" onClick={() => setCoverLetterOpen(false)}>✕</button></div>
                   {coverLetterLoading ? <div className="loading"><span className="spinner" /> Writing…</div> :
                    coverLetterError ? <div className="error-box">{coverLetterError}</div> : (
                     <>
-                      <textarea rows={12} value={coverLetterText} onChange={e => setCoverLetterText(e.target.value)} style={{ fontSize: 12.4, marginBottom: 10 }} />
+                      <textarea rows={10} value={coverLetterText} onChange={e => setCoverLetterText(e.target.value)} style={{ fontSize: 12.4, marginBottom: 10 }} />
                       <button className="btn btn-sm btn-primary btn-full" onClick={() => { navigator.clipboard.writeText(coverLetterText); notify?.({ kind: 'good', title: 'Copied', detail: 'Cover letter copied to clipboard' }); }}>Copy to clipboard</button>
                     </>
                   )}
@@ -921,13 +931,13 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
               )}
 
               {emailOpen && (
-                <div className="panel">
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
                   <div className="panel-head"><h2>Draft Email</h2><button className="btn btn-xs btn-ghost" onClick={() => setEmailOpen(false)}>✕</button></div>
                   <div className="mail-shell">
                     <div className="mail-field"><span className="k">To</span><input type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="recruiter@company.com" /></div>
                     <div className="mail-field"><span className="k">Subject</span><input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} /></div>
                   </div>
-                  <div className="mail-body-wrap"><textarea rows={8} value={emailBody} onChange={e => setEmailBody(e.target.value)} /></div>
+                  <div className="mail-body-wrap"><textarea rows={7} value={emailBody} onChange={e => setEmailBody(e.target.value)} /></div>
                   <div className="attach-chip">📎 {exportTitle()}.pdf will be attached</div>
                   {sendError && <div className="error-box" style={{ marginTop: 10 }}>{sendError}</div>}
                   {sendSuccess && <div className="success-box" style={{ marginTop: 10 }}>Draft created in your Gmail account — check your Drafts folder to review and hit send.</div>}
@@ -937,9 +947,9 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
                 </div>
               )}
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </section>
   );
 }

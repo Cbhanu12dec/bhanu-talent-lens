@@ -176,6 +176,35 @@ export async function deleteDomain(id) {
 }
 
 // ============================================================
+// CUSTOM DOMAINS  (users/{uid}/customDomains/{id})
+// Self-serve domains a user creates from the workspace. Deliberately kept
+// out of the global `domains` collection so a user can never read, edit, or
+// delete another user's domain, nor mutate the admin-curated published set.
+// ============================================================
+
+export async function listCustomDomains(uid) {
+  const snap = await getDocs(collection(db, 'users', uid, 'customDomains'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data(), isCustom: true }));
+}
+
+export async function createCustomDomain(uid, { name, parentDomainId = null, parentDomainName = '', keywords = [] }) {
+  const ref = doc(collection(db, 'users', uid, 'customDomains'));
+  const data = {
+    name: name.trim(),
+    summary: parentDomainName ? `Custom domain under ${parentDomainName}` : 'Custom domain',
+    parentDomainId, parentDomainName,
+    keywords: [...new Set(keywords.map(k => k.trim()).filter(Boolean))],
+    createdAt: serverTimestamp(),
+  };
+  await setDoc(ref, data);
+  return { id: ref.id, ...data, isCustom: true };
+}
+
+export async function deleteCustomDomain(uid, id) {
+  await deleteDoc(doc(db, 'users', uid, 'customDomains', id));
+}
+
+// ============================================================
 // JOB DESCRIPTIONS  (users/{uid}/jobDescriptions/{id})
 // ============================================================
 

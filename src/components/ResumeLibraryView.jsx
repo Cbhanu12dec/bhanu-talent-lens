@@ -19,7 +19,7 @@ const SUGGESTED_PROMPTS = [
   'Favor recent experience over older roles'
 ];
 
-export default function ResumeLibraryView({ uid, state, notify }) {
+export default function ResumeLibraryView({ uid, state, setView, notify }) {
   const { resumes, setResumes, activeResumeId, setActiveResumeId } = state;
   const [addOpen, setAddOpen] = useState(false);
   const [mode, setMode] = useState('upload');
@@ -134,7 +134,7 @@ export default function ResumeLibraryView({ uid, state, notify }) {
   return (
     <section>
       <h1 className="page-title">Resume library</h1>
-      <p className="page-sub">Manage base resumes and their AI tailoring preferences. Whichever resume is active is what gets tailored from Build / Tailor Resume.</p>
+      <p className="page-sub">Manage base resumes and their AI tailoring preferences. The resume flagged <strong>Default for tailoring</strong> is the one the workspace starts from.</p>
 
       {addOpen && (
         <div className="panel">
@@ -185,7 +185,7 @@ export default function ResumeLibraryView({ uid, state, notify }) {
             <div className="resume-card-top" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div className="resume-card-icon">{DOC_ICON}</div>
-                <span className={`badge${r.id === activeResumeId ? ' active' : ''}`}>{r.id === activeResumeId ? 'Active' : 'Inactive'}</span>
+                {r.id === activeResumeId && <span className="badge badge-success">Default for tailoring</span>}
               </div>
                 {/* three-dot overflow menu for secondary + destructive actions */}
                 <div style={{ position: 'relative' }}>
@@ -200,7 +200,7 @@ export default function ResumeLibraryView({ uid, state, notify }) {
                       <div className="card-overflow-menu">
                         <div className="card-overflow-item" onClick={() => { openEdit(r); setOverflowOpen(null); }}>Edit text</div>
                         <div className="card-overflow-item" onClick={() => { setExpandedId(expandedId === r.id ? null : r.id); setOverflowOpen(null); }}>AI preferences</div>
-                        {r.id !== activeResumeId && <div className="card-overflow-item" onClick={() => { setActiveResumeId(r.id); setOverflowOpen(null); }}>Set as active</div>}
+                        {r.id !== activeResumeId && <div className="card-overflow-item" onClick={() => { setActiveResumeId(r.id); setOverflowOpen(null); }}>Set as default</div>}
                         <div className="card-overflow-item danger" onClick={() => { handleDelete(r.id); setOverflowOpen(null); }}>Delete</div>
                       </div>
                     </>
@@ -212,7 +212,8 @@ export default function ResumeLibraryView({ uid, state, notify }) {
               {(r.text?.length || 0).toLocaleString()} chars{r.fileName ? ` · ${r.fileName}` : ''}
             </div>
             <div className="resume-card-actions">
-              {r.id !== activeResumeId && <button className="btn btn-sm" onClick={() => setActiveResumeId(r.id)}>Set active</button>}
+              <button className="btn btn-sm btn-primary" onClick={() => { setActiveResumeId(r.id); setView?.('agent'); }}>Tailor this →</button>
+              {r.id !== activeResumeId && <button className="btn btn-sm" onClick={() => setActiveResumeId(r.id)}>Set default</button>}
               <button className="btn btn-sm btn-ghost" onClick={() => openEdit(r)}>Edit</button>
             </div>
 
