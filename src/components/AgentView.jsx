@@ -172,6 +172,9 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
   const [version, setVersion] = useState(null);
   const [reviewTab, setReviewTab] = useState('resume');
   const [showHighlights, setShowHighlights] = useState(true);
+  const [rebuildSections, setRebuildSections] = useState({ summary: true, experience: true });
+  const [selectedKeywords, setSelectedKeywords] = useState([]);
+  const [rebuildNotes, setRebuildNotes] = useState('');
 
   // Export state
   const [exportFormat, setExportFormat] = useState('pdf');
@@ -247,6 +250,7 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
       setVersion(v);
       if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
       notify?.({ kind: 'good', title: 'Resume built', detail: `ATS match score: ${matchScore}%` });
+      setStep('review'); setReviewTab('resume');
     } catch (err) {
       console.error(err);
       addLog(`Failed: ${err.message}`);
@@ -299,6 +303,7 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
       addLog(BUILD_STAGES.existing[2]); advanceStage();
       await generateTailoredVersion(baseResume, customInstructions.trim() ? [customInstructions.trim()] : []);
       advanceStage();
+      setStep('review'); setReviewTab('resume');
     } catch (err) {
       console.error(err);
       addLog(`Failed: ${err.message}`);
@@ -308,11 +313,11 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
     setLoading(false);
   }
 
-  async function generateTailoredVersion(baseR, extraPrompts = []) {
+  async function generateTailoredVersion(baseR, extraPrompts = [], intensityOverride) {
     const { resume, atsScore, creditsRemaining } = await tailorResume({
       jdText: jdText.trim(), resumeText: baseR.text,
       prompts: [...(baseR.prompts || []), ...extraPrompts],
-      atsTarget: baseR.atsTarget || 92, intensity: tailoringLevel.toLowerCase(), allowRetry: true,
+      atsTarget: baseR.atsTarget || 92, intensity: (intensityOverride || tailoringLevel).toLowerCase(), allowRetry: true,
     });
     addLog(`Build complete — match score ${atsScore}%`);
     setBuildDone(true);
@@ -336,6 +341,43 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
     } catch (err) {
       console.error(err);
       setError(err.message || 'Re-tailor failed.');
+    }
+    setRegenerating(false);
+  }
+
+  /* ============================= AGGRESSIVE REBUILD ============================= */
+  function buildRebuildDirective() {
+    const parts = [];
+    if (rebuildSections.summary) parts.push('Completely rewrite the Professional Summary from scratch — do not reuse any previous phrasing. Lead with the strongest, most JD-relevant positioning.');
+    if (rebuildSections.experience) parts.push('Completely rewrite every Experience bullet from scratch — restructure, re-order and re-word aggressively for maximum JD alignment, while keeping every claim truthful to the source evidence.');
+    if (selectedKeywords.length) parts.push(`Naturally incorporate these missing keywords wherever the candidate's real evidence supports them: ${selectedKeywords.join(', ')}.`);
+    if (rebuildNotes.trim()) parts.push(rebuildNotes.trim());
+    return parts.join(' ');
+  }
+
+  async function handleAggressiveRebuild() {
+    const directive = buildRebuildDirective();
+    if (!directive) { setError('Select a section, a keyword, or add an instruction before rebuilding.'); return; }
+    setRegenerating(true); setError('');
+    try {
+      if (mode === 'scratch') {
+        if (!strategy || !jobDescription || !runId || !profile) throw new Error('Missing run context — start a new run.');
+        const updatedStrategy = { ...strategy, positioning: appendCustom(strategy.positioning, directive) };
+        const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
+          agentRunId: runId, careerProfile: profile, jobDescription, strategy: updatedStrategy, domainId: selectedDomainId,
+        });
+        const v = await getResumeVersion(uid, versionId);
+        setVersion(v);
+        if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
+        notify?.({ kind: 'good', title: 'Resume rebuilt', detail: `ATS match score: ${matchScore}%` });
+      } else {
+        if (!baseResume) throw new Error('Base resume missing — start a new run.');
+        await generateTailoredVersion(baseResume, [directive], 'aggressive');
+      }
+      setSelectedKeywords([]); setRebuildNotes('');
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Rebuild failed. Please try again.');
     }
     setRegenerating(false);
   }
@@ -434,6 +476,18 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
   const stages = BUILD_STAGES[mode];
   const progressPct = buildDone ? 100 : Math.min(95, Math.round((buildStageIdx / stages.length) * 100));
   const highlightTerms = version?.content?.highlights?.length ? version.content.highlights : (mode === 'scratch' ? (strategy?.skillPriority || []) : []);
+
+  // Skill keywords the JD asks for that don't yet appear anywhere in the generated resume.
+  const missingKeywords = React.useMemo(() => {
+    if (!version?.content) return [];
+    const text = flattenResume(version.content).toLowerCase();
+    const pool = mode === 'scratch'
+      ? [...(version.requirementMatches || []).map(m => m.name), ...(strategy?.skillPriority || []), ...(jobDescription?.requiredSkills || [])]
+      : [...(jdIntel?.matchMatrix || []).map(m => m.term)];
+    return [...new Set(pool.filter(Boolean).map(String))]
+      .filter(k => k.trim() && !text.includes(k.toLowerCase()))
+      .slice(0, 24);
+  }, [version, strategy, jobDescription, jdIntel, mode]);
 
   return (
     <section>
@@ -790,6 +844,56 @@ export default function AgentView({ uid, state, notify, credits, onCreditsChange
 
             {/* Export sidebar — always visible alongside Review, no separate step */}
             <div>
+              <div className="panel">
+                <div className="panel-head"><h2>Refine & Rebuild</h2></div>
+                <p className="field-hint" style={{ marginBottom: 10 }}>Aggressively regenerate sections and pull in keywords the resume is missing.</p>
+
+                <div className="field-label" style={{ marginBottom: 6 }}>Rebuild sections</div>
+                <label className="field-check" style={{ marginBottom: 4 }}>
+                  <input type="checkbox" checked={rebuildSections.summary} onChange={e => setRebuildSections(s => ({ ...s, summary: e.target.checked }))} style={{ width: 'auto', accentColor: 'var(--primary)' }} />
+                  Summary
+                </label>
+                <label className="field-check" style={{ marginBottom: 12 }}>
+                  <input type="checkbox" checked={rebuildSections.experience} onChange={e => setRebuildSections(s => ({ ...s, experience: e.target.checked }))} style={{ width: 'auto', accentColor: 'var(--primary)' }} />
+                  Experience
+                </label>
+
+                <div className="field-label" style={{ marginBottom: 6 }}>
+                  Missing keywords {missingKeywords.length > 0 && <span className="count">({selectedKeywords.length}/{missingKeywords.length} selected)</span>}
+                </div>
+                {missingKeywords.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--success)', fontWeight: 500, marginBottom: 12 }}>✓ Every tracked keyword already appears in the resume</div>
+                ) : (
+                  <>
+                    <div className="chip-row" style={{ marginBottom: 8 }}>
+                      {missingKeywords.map(k => {
+                        const on = selectedKeywords.includes(k);
+                        return (
+                          <div key={k} className="chip" style={{ cursor: 'pointer', background: on ? 'var(--primary-subtle)' : 'var(--bg)', color: on ? 'var(--primary)' : 'var(--text-secondary)', border: `1px solid ${on ? 'var(--primary)' : 'var(--border)'}` }}
+                            onClick={() => setSelectedKeywords(list => on ? list.filter(x => x !== k) : [...list, k])}>
+                            {on ? '✓ ' : '+ '}{k}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button className="btn btn-xs btn-ghost" style={{ marginBottom: 12 }}
+                      onClick={() => setSelectedKeywords(selectedKeywords.length === missingKeywords.length ? [] : [...missingKeywords])}>
+                      {selectedKeywords.length === missingKeywords.length ? 'Clear all' : 'Select all'}
+                    </button>
+                  </>
+                )}
+
+                <div className="field">
+                  <label className="field-label">Extra instructions</label>
+                  <textarea rows={2} value={rebuildNotes} onChange={e => setRebuildNotes(e.target.value)} placeholder="e.g. Lead with the Microsoft role, cut it to one page…" />
+                </div>
+
+                {error && <div className="error-box" style={{ marginBottom: 10 }}>{error}</div>}
+                <button className="btn btn-primary btn-full" disabled={regenerating} onClick={handleAggressiveRebuild}>
+                  {regenerating ? 'Rebuilding…' : '↻ Rebuild Resume'}
+                </button>
+              </div>
+
               <div className="panel">
                 <div className="panel-head"><h2>Export</h2></div>
                 <div className="field">
