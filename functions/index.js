@@ -157,6 +157,106 @@ function sanitizeResumeContent(node) {
   return node;
 }
 
+// ===================== DETERMINISTIC ATS AUDIT =====================
+// The model's self-reported ATS score is systematically optimistic, so it is
+// never trusted on its own. Everything below is measured against the resume
+// the model actually produced, and drives both the repair pass and the score.
+
+const ATS_MIN_KEYWORD_COVERAGE = 85;   // percent of required keywords present verbatim
+const ATS_TARGET_QUANT_RATIO = 0.5;    // share of bullets carrying a concrete number
+
+const WEAK_OPENER_RE = /^(responsible for|worked on|helped|assisted (with|in)|involved in|tasked with|duties included|participated in|contributed to)\b/i;
+const PRONOUN_RE = /\b(I|my|me|we|our|us)\b/;
+const BUZZWORD_RE = /\b(synergy|synergies|team player|results[- ]driven|go[- ]getter|self[- ]starter|think outside the box|detail[- ]oriented|hard[- ]working|dynamic professional|proven track record)\b/i;
+
+function resumeToPlainText(resume) {
+  const parts = [];
+  for (const s of resume?.sections || []) {
+    if (s.heading) parts.push(s.heading);
+    for (const p of s.paragraphs || []) parts.push(p);
+    for (const e of s.entries || []) {
+      parts.push(e.title || '', e.subtitle || '', e.dateRight || '', e.footer || '');
+      for (const b of e.bullets || []) parts.push(b);
+    }
+  }
+  return parts.filter(Boolean).join('\n');
+}
+
+function collectExperienceBullets(resume) {
+  return (resume?.sections || [])
+    .filter(s => !/education|certification/i.test(s.heading || ''))
+    .flatMap(s => (s.entries || []).flatMap(e => e.bullets || []))
+    .filter(b => typeof b === 'string' && b.trim());
+}
+
+function auditAts(resume, requiredKeywords = []) {
+  const text = resumeToPlainText(resume).toLowerCase();
+  const required = [...new Set((requiredKeywords || []).map(k => String(k || '').trim()).filter(Boolean))];
+  const missingKeywords = required.filter(k => !text.includes(k.toLowerCase()));
+  const keywordCoverage = required.length
+    ? Math.round(((required.length - missingKeywords.length) / required.length) * 100)
+    : null;
+
+  const bullets = collectExperienceBullets(resume);
+  const quantifiedBullets = bullets.filter(b => /\d/.test(b)).length;
+  const quantificationRatio = bullets.length ? quantifiedBullets / bullets.length : 0;
+
+  return {
+    totalRequired: required.length,
+    keywordCoverage,
+    missingKeywords,
+    totalBullets: bullets.length,
+    quantifiedBullets,
+    quantificationRatio,
+    pronounBullets: bullets.filter(b => PRONOUN_RE.test(b)),
+    weakOpenerBullets: bullets.filter(b => WEAK_OPENER_RE.test(b.trim())),
+    buzzwordBullets: bullets.filter(b => BUZZWORD_RE.test(b)),
+  };
+}
+
+// Blends the model's estimate with what was actually measured, so the number
+// shown to the user cannot drift far above the resume's real keyword coverage.
+function reconcileAtsScore(modelScore, audit) {
+  if (!audit || audit.keywordCoverage == null) return modelScore;
+  const quantScore = Math.min(100, Math.round((audit.quantificationRatio / ATS_TARGET_QUANT_RATIO) * 100));
+  const hygienePenalty = Math.min(40, (audit.pronounBullets.length + audit.weakOpenerBullets.length + audit.buzzwordBullets.length) * 8);
+  const measured = Math.round(audit.keywordCoverage * 0.6 + quantScore * 0.2 + (100 - hygienePenalty) * 0.2);
+  return Math.max(0, Math.min(100, Math.round(modelScore * 0.4 + measured * 0.6)));
+}
+
+function atsRepairInstruction(audit) {
+  const issues = [];
+  if (audit.missingKeywords.length) {
+    issues.push(`These required JD keywords do NOT appear anywhere in your draft. Work each one in verbatim wherever the candidate's real evidence supports it, or drop it only if genuinely unsupported: ${audit.missingKeywords.join(', ')}.`);
+  }
+  if (audit.totalBullets && audit.quantificationRatio < ATS_TARGET_QUANT_RATIO) {
+    issues.push(`Only ${audit.quantifiedBullets} of ${audit.totalBullets} experience bullets contain a concrete number. Raise this to at least half by surfacing scale, volume, team size, timeline, or percentage figures already implied by the source resume. Never invent a figure that is not supported.`);
+  }
+  if (audit.weakOpenerBullets.length) {
+    issues.push(`These bullets open with a passive/weak phrase instead of a strong action verb. Rewrite each: ${audit.weakOpenerBullets.slice(0, 5).map(b => `"${b.slice(0, 70)}"`).join('; ')}.`);
+  }
+  if (audit.pronounBullets.length) {
+    issues.push(`Remove all first-person pronouns from these bullets: ${audit.pronounBullets.slice(0, 5).map(b => `"${b.slice(0, 70)}"`).join('; ')}.`);
+  }
+  if (audit.buzzwordBullets.length) {
+    issues.push(`Replace the generic buzzwords in these bullets with the specific thing that was actually done: ${audit.buzzwordBullets.slice(0, 5).map(b => `"${b.slice(0, 70)}"`).join('; ')}.`);
+  }
+  return issues.length ? issues.map((s, i) => `${i + 1}. ${s}`).join('\n') : '';
+}
+
+// Shared ATS ruleset injected into every resume-generating prompt.
+const ATS_RULES = `ATS COMPLIANCE - non-negotiable structural rules
+- Use standard, recognizable section headings only: PROFESSIONAL SUMMARY, TECHNICAL SKILLS, PROFESSIONAL EXPERIENCE, EDUCATION, CERTIFICATIONS. Never invent creative heading names.
+- Start every bullet with a strong past-tense action verb. Never open with "Responsible for", "Worked on", "Helped", "Assisted with", "Involved in", or "Tasked with".
+- No first-person pronouns anywhere (I, my, we, our).
+- Spell out an acronym on first use with the short form in parentheses, then use the short form after, e.g. "Continuous Integration/Continuous Deployment (CI/CD)". ATS parsers match on both forms, so both must appear at least once.
+- Keep every date range in the same format across the whole resume: "Mon YYYY - Mon YYYY", using "Present" for current roles.
+- Plain text only: no tables, columns, graphics, text boxes, symbols, or decorative characters. No markdown bold, italics, or asterisks.
+- Quantify at least half of all experience bullets with a real number: scale, volume, users, revenue, team size, percentage, or timeline. Only use figures the source material genuinely supports, never invented ones.
+- Banned filler: "synergy", "team player", "results-driven", "go-getter", "self-starter", "detail-oriented", "proven track record". State the specific accomplishment instead.
+- Every skill listed in the Skills section must also be demonstrated somewhere in an experience bullet or the summary, not just listed in isolation.`;
+
+
 // Global billing config, admin-controlled. Read fresh on every tailor call
 // (one small Firestore read) rather than cached in memory, so a toggle
 // flip by the admin takes effect immediately for every user without
@@ -311,17 +411,21 @@ Each bullet must be traceable to a specific JD requirement. For every bullet: le
 PUNCTUATION — hard rule
 Never use em dashes or en dashes anywhere in the resume output. Use commas, colons, or separate sentences instead. For date ranges use a plain hyphen, e.g. "Jan 2020 - Mar 2023".
 
+${ATS_RULES}
+
 PRIORITY ORDER when tensions arise: truthfulness > evidence strength > required JD coverage > recruiter readability > style polish.
 
 BEFORE RETURNING — internal audit, do not print any of this reasoning, only the final output
 1. List the JD's most important requirements with your evidence classification for each, and confirm every DIRECT/TRANSFERABLE requirement actually appears in your draft's exact wording — add any that are missing.
 2. Check every changed bullet, the Skills section, and every job title against REWRITE DEPTH above — flag and rewrite any bullet that's just the original sentence with a keyword swapped in, any Skills list that's a flat uncategorized dump, and any title that still leads with a different function than what this JD is hiring for. Cut bullets that don't earn their place, merge redundant ones, then re-read only the summary and most recent role: could a recruiter identify the target role, seniority, and 2-3 core strengths in 10 seconds? If not, revise those two sections before moving on.
-3. Only after this pass, assign the ATS score and breakdown honestly based on the resume you actually produced.
+3. Walk the ATS COMPLIANCE list above item by item against your draft and fix every violation: weak bullet openers, pronouns, unexpanded acronyms, inconsistent date formats, banned filler, and bullets with no number where the source supports one.
+4. Only after this pass, assign the ATS score and breakdown honestly based on the resume you actually produced.
 
 Respond in EXACTLY this format, nothing before or after — no markdown fences, no commentary:
 
 ROLE_SIMILARITY: <integer 0-100>
 ATS_SCORE: <integer 0-100, your honest estimate after the audit above>
+REQUIRED_KEYWORDS: <a single JSON array on one line of the 10-25 most important literal terms this JD requires that the candidate's evidence genuinely supports, exactly as the JD words them, e.g. ["Kubernetes","CI/CD","distributed systems"]. These are verified verbatim against your output, so only list terms you actually worked into the resume text.>
 ATS_BREAKDOWN: <a single JSON object, real JSON on one line, with these exact integer 0-100 fields: {"keywordMatch": 92, "formatting": 95, "experienceRelevance": 81, "actionVerbs": 94, "quantification": 72, "leadership": 90, "technicalDepth": 84, "industryMatch": 88, "seniority": 91}. Score each dimension honestly and independently — they should not all just mirror the overall score. "formatting" reflects structural ATS-friendliness of the output itself (plain sections, no tables) and should normally score high since this schema is inherently ATS-safe. "quantification" reflects how many bullets have concrete numbers/metrics — score this honestly low if the original resume didn't have many to work with, since you must not invent metrics that aren't there.>
 ===RESUME_JSON===
 <a single JSON object with this exact shape — real JSON, not a string containing JSON:
@@ -374,6 +478,7 @@ Include only the sections that make sense for this resume's actual content — d
         const roleMatch = raw.match(/ROLE_SIMILARITY:\s*(\d{1,3})/i);
         const atsMatch = raw.match(/ATS_SCORE:\s*(\d{1,3})/i);
         const breakdownMatch = raw.match(/ATS_BREAKDOWN:\s*(\{[^\n]*\})/i);
+        const keywordsMatch = raw.match(/REQUIRED_KEYWORDS:\s*(\[[^\n]*\])/i);
         const resumeIdx = raw.search(/===RESUME_JSON===/i);
 
         if (!atsMatch || resumeIdx === -1) {
@@ -383,6 +488,8 @@ Include only the sections that make sense for this resume's actual content — d
         const score = Math.max(0, Math.min(100, parseInt(atsMatch[1], 10)));
         let breakdown = null;
         if (breakdownMatch) { try { breakdown = JSON.parse(breakdownMatch[1]); } catch (e) { /* optional */ } }
+        let requiredKeywords = [];
+        if (keywordsMatch) { try { requiredKeywords = JSON.parse(keywordsMatch[1]); } catch (e) { /* optional */ } }
 
         const resumeRaw = raw.slice(resumeIdx).replace(/===RESUME_JSON===/i, '').trim();
         let parsedResume;
@@ -394,7 +501,14 @@ Include only the sections that make sense for this resume's actual content — d
         if (!parsedResume || !parsedResume.name || !Array.isArray(parsedResume.sections)) {
           throw new Error('Tailored resume came back with an unexpected shape — please try again.');
         }
-        return { resume: sanitizeResumeContent(parsedResume), atsScore: score, roleSimilarity, breakdown };
+        const resume = sanitizeResumeContent(parsedResume);
+        const audit = auditAts(resume, requiredKeywords);
+        const reconciled = reconcileAtsScore(score, audit);
+        if (breakdown && audit.keywordCoverage != null) {
+          breakdown.keywordMatch = audit.keywordCoverage;
+          breakdown.quantification = Math.min(100, Math.round((audit.quantificationRatio / ATS_TARGET_QUANT_RATIO) * 100));
+        }
+        return { resume, atsScore: reconciled, modelScore: score, roleSimilarity, breakdown, audit };
       }
 
       async function runPass(userContent, timeoutMs, logTag, model) {
@@ -426,10 +540,24 @@ ${resumeText}`;
       // pure waste (worse latency, no realistic upside). Runs by default;
       // the client's "Advanced" toggle passes allowRetry: false to opt out
       // for lower worst-case latency at the cost of the ATS-floor safety net.
-      if (allowRetry !== false && best.atsScore < MIN_ACCEPTABLE_ATS && best.roleSimilarity >= 60) {
+      // The retry is now driven by what was actually measured in the draft,
+      // not just the model's own score — it gets the exact missing keywords
+      // and hygiene violations to fix rather than a vague "try harder".
+      const needsRepair = (r) => {
+        if (r.atsScore < MIN_ACCEPTABLE_ATS) return true;
+        if (r.audit.keywordCoverage != null && r.audit.keywordCoverage < ATS_MIN_KEYWORD_COVERAGE) return true;
+        if (r.audit.totalBullets && r.audit.quantificationRatio < ATS_TARGET_QUANT_RATIO) return true;
+        return r.audit.weakOpenerBullets.length > 0 || r.audit.pronounBullets.length > 0 || r.audit.buzzwordBullets.length > 0;
+      };
+
+      if (allowRetry !== false && needsRepair(best) && best.roleSimilarity >= 60) {
+        const repairList = atsRepairInstruction(best.audit);
         const retryUserContent = `${baseUserContent}
 
-Your previous attempt scored an estimated ${best.atsScore}/100, below the ${effectiveTarget} target. Redo the internal audit: specifically check for DIRECT or TRANSFERABLE requirements missing from your draft's exact wording, and add them using the JD's own terms wherever truthfully supported. Cut lower-value bullets to make room if needed. Do not fabricate anything not already grounded in the original resume — the truthfulness constraint still applies without exception.`;
+Your previous attempt was audited mechanically against the resume text you produced. Estimated score ${best.modelScore}/100, measured ${best.atsScore}/100 against a ${effectiveTarget} target${best.audit.keywordCoverage != null ? `, keyword coverage ${best.audit.keywordCoverage}%` : ''}. Produce a corrected version that fixes every item below while keeping everything already working:
+${repairList || 'Raise overall JD alignment and keyword coverage.'}
+
+Cut lower-value bullets to make room if needed. Do not fabricate anything not already grounded in the original resume — the truthfulness constraint still applies without exception.`;
         try {
           const retry = await runPass(retryUserContent, 60000, 'tailor_retry');
           if (retry.atsScore > best.atsScore) best = retry;
@@ -438,7 +566,23 @@ Your previous attempt scored an estimated ${best.atsScore}/100, below the ${effe
         }
       }
 
-      const resultJson = { resume: best.resume, atsScore: best.atsScore, metTarget: best.atsScore >= effectiveTarget, breakdown: best.breakdown };
+      console.log(JSON.stringify({
+        tag: 'tailor_ats_audit', uid,
+        modelScore: best.modelScore, finalScore: best.atsScore,
+        keywordCoverage: best.audit.keywordCoverage, missingCount: best.audit.missingKeywords.length,
+        quantifiedBullets: best.audit.quantifiedBullets, totalBullets: best.audit.totalBullets,
+        weakOpeners: best.audit.weakOpenerBullets.length, pronouns: best.audit.pronounBullets.length,
+      }));
+
+      const resultJson = {
+        resume: best.resume, atsScore: best.atsScore, metTarget: best.atsScore >= effectiveTarget, breakdown: best.breakdown,
+        atsAudit: {
+          keywordCoverage: best.audit.keywordCoverage,
+          missingKeywords: best.audit.missingKeywords,
+          quantifiedBullets: best.audit.quantifiedBullets,
+          totalBullets: best.audit.totalBullets,
+        },
+      };
 
       // Cache the successful result under this request's content hash so a
       // duplicate submission within the window is served without spending
@@ -1023,6 +1167,8 @@ Do not carry over generic duties. Rebuild each bullet from the underlying projec
 PUNCTUATION - hard rule
 Never use em dashes or en dashes anywhere in the output. Use commas, colons, or separate sentences instead. For date ranges use a plain hyphen, e.g. "Jan 2020 - Mar 2023".
 
+${ATS_RULES}
+
 Respond in EXACTLY this JSON format, nothing else:
 {
   "name": "candidate name",
@@ -1047,24 +1193,65 @@ POSITIONING: ${strategy.positioning || ''}
 SKILLS TO HIGHLIGHT: ${(strategy.skillPriority || []).slice(0, 8).join(', ')}
 ${styleNote ? `STYLE DIRECTIVES: ${styleNote}` : ''}`;
 
-    const raw = await callAnthropic(apiKey, userPrompt, {
-      model: MODEL_QUALITY, maxTokens: 4096, system: systemPrompt,
-      timeoutMs: 120000, logTag: 'agentBuild'
-    });
+    async function runAgentBuildPass(userContent, logTag) {
+      const rawOut = await callAnthropic(apiKey, userContent, {
+        model: MODEL_QUALITY, maxTokens: 4096, system: systemPrompt,
+        timeoutMs: 120000, logTag
+      });
+      return sanitizeResumeContent(JSON.parse(stripJsonFence(rawOut)));
+    }
 
-    const content = sanitizeResumeContent(JSON.parse(stripJsonFence(raw)));
+    function scoreAgainstRequirements(resume) {
+      const contentText = JSON.stringify(resume).toLowerCase();
+      const matches = (jobDescription.requirements || []).map(req => {
+        const needle = req.name.toLowerCase();
+        const mentions = (contentText.match(new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+        return { name: req.name, importance: req.importance, mentionCount: req.mentionCount, evidenceStrength: mentions >= 2 ? 'STRONG' : mentions === 1 ? 'WEAK' : 'MISSING', mentions };
+      });
+      const strong = matches.filter(m => m.evidenceStrength === 'STRONG').length;
+      const weak = matches.filter(m => m.evidenceStrength === 'WEAK').length;
+      const total = matches.length || 1;
+      return { matches, score: Math.round(((strong + weak * 0.5) / total) * 100) };
+    }
 
-    // Score match against requirements
-    const contentText = JSON.stringify(content).toLowerCase();
-    const requirementMatches = (jobDescription.requirements || []).map(req => {
-      const needle = req.name.toLowerCase();
-      const mentions = (contentText.match(new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-      return { name: req.name, importance: req.importance, mentionCount: req.mentionCount, evidenceStrength: mentions >= 2 ? 'STRONG' : mentions === 1 ? 'WEAK' : 'MISSING', mentions };
-    });
-    const strong = requirementMatches.filter(m => m.evidenceStrength === 'STRONG').length;
-    const weak = requirementMatches.filter(m => m.evidenceStrength === 'WEAK').length;
-    const total = requirementMatches.length || 1;
-    const matchScore = Math.round(((strong + weak * 0.5) / total) * 100);
+    let content = await runAgentBuildPass(userPrompt, 'agentBuild');
+    let { matches: requirementMatches, score: matchScore } = scoreAgainstRequirements(content);
+
+    // Same measured-then-repair loop the tailor path uses: the first draft is
+    // audited against the JD's own requirement list plus the ATS hygiene
+    // rules, and only re-run when something concrete is actually wrong.
+    const criticalMissing = requirementMatches
+      .filter(m => m.evidenceStrength === 'MISSING' && ['Critical', 'High'].includes(m.importance))
+      .map(m => m.name);
+    let buildAudit = auditAts(content, requirementMatches.filter(m => m.evidenceStrength !== 'MISSING').map(m => m.name));
+    buildAudit = { ...buildAudit, missingKeywords: criticalMissing };
+    const buildRepair = atsRepairInstruction(buildAudit);
+
+    if (buildRepair && (matchScore < 85 || criticalMissing.length)) {
+      try {
+        const repaired = await runAgentBuildPass(`${userPrompt}
+
+Your previous draft was audited mechanically against the resume text you produced. It scored ${matchScore}/100 on JD requirement coverage. Produce a corrected version that fixes every item below while keeping everything already working:
+${buildRepair}
+
+Never invent employers, dates, credentials, or metrics that are not in the ground truth.`, 'agentBuild_repair');
+        const rescored = scoreAgainstRequirements(repaired);
+        if (rescored.score > matchScore) {
+          content = repaired;
+          requirementMatches = rescored.matches;
+          matchScore = rescored.score;
+        }
+      } catch (e) {
+        console.error('agentBuild repair pass failed, keeping first draft:', e.message);
+      }
+    }
+
+    console.log(JSON.stringify({
+      tag: 'agent_build_audit', uid, matchScore,
+      criticalMissing: criticalMissing.length,
+      quantifiedBullets: buildAudit.quantifiedBullets, totalBullets: buildAudit.totalBullets,
+      weakOpeners: buildAudit.weakOpenerBullets.length, pronouns: buildAudit.pronounBullets.length,
+    }));
 
     // Truthfulness flags — verify every named employer/school
     const flags = [];
@@ -1090,7 +1277,14 @@ ${styleNote ? `STYLE DIRECTIVES: ${styleNote}` : ''}`;
       id: versionId, agentRunId: agentRunId || null,
       versionNumber: 1, label: 'Initial Agent build',
       content, matchScore,
-      scoreBreakdown: { keywordCoverage: matchScore, experienceRelevance: matchScore - 5, impactMetrics: 65, roleAlignment: matchScore, formatting: 95, leadership: 75 },
+      scoreBreakdown: {
+        keywordCoverage: matchScore,
+        experienceRelevance: matchScore - 5,
+        impactMetrics: Math.min(100, Math.round((buildAudit.quantificationRatio / ATS_TARGET_QUANT_RATIO) * 100)),
+        roleAlignment: matchScore,
+        formatting: 95,
+        leadership: 75,
+      },
       requirementMatches, changes, flags,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
