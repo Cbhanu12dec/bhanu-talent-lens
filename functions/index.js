@@ -131,6 +131,32 @@ function stripJsonFence(text) {
   return text.replace(/```json/gi, '').replace(/```/g, '').trim();
 }
 
+// Models reach for em/en dashes constantly and they read as AI-written to
+// recruiters. Date ranges keep a plain hyphen; in prose the dash becomes a comma.
+const DATE_RANGE_RE = /^(?:[A-Za-z]{3,9}\.?\s*)?\d{4}\s*[—–-]\s*(?:(?:[A-Za-z]{3,9}\.?\s*)?\d{4}|Present|Current|Now)$/i;
+
+function stripFancyDashes(str) {
+  const trimmed = str.trim();
+  if (DATE_RANGE_RE.test(trimmed)) return trimmed.replace(/\s*[—–]\s*/g, ' - ');
+  return trimmed
+    .replace(/\s*—\s*/g, ', ')
+    .replace(/\s*–\s*/g, ' - ')
+    .replace(/\s*,\s*,\s*/g, ', ')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/^[,\s]+/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function sanitizeResumeContent(node) {
+  if (typeof node === 'string') return stripFancyDashes(node);
+  if (Array.isArray(node)) return node.map(sanitizeResumeContent);
+  if (node && typeof node === 'object') {
+    return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, sanitizeResumeContent(v)]));
+  }
+  return node;
+}
+
 // Global billing config, admin-controlled. Read fresh on every tailor call
 // (one small Firestore read) rather than cached in memory, so a toggle
 // flip by the admin takes effect immediately for every user without
@@ -279,6 +305,12 @@ ROLE FIT (0-100, estimate internally): 80-100 same or closely related discipline
 KEYWORD COVERAGE — hard requirement, not a stylistic suggestion
 Every JD requirement backed by DIRECT or TRANSFERABLE evidence must appear using the JD's own wording, at least once, somewhere in the resume — don't omit a supported keyword for style reasons. Placement priority: Summary and most recent role first, then Technical Skills, then earlier roles.
 
+BULLET JUSTIFICATION — every experience bullet, no exceptions
+Each bullet must be traceable to a specific JD requirement. For every bullet: lead with the action using the JD's own terminology for the technology/domain/responsibility, state the scope or scale where the source supports it, and close on a concrete outcome. If a bullet cannot be tied to anything the JD asks for, cut it and write a stronger one from the same role's real evidence instead. Order bullets inside each role so the ones covering Critical/High requirements come first. Do not reuse the same leading verb more than twice across the whole resume.
+
+PUNCTUATION — hard rule
+Never use em dashes or en dashes anywhere in the resume output. Use commas, colons, or separate sentences instead. For date ranges use a plain hyphen, e.g. "Jan 2020 - Mar 2023".
+
 PRIORITY ORDER when tensions arise: truthfulness > evidence strength > required JD coverage > recruiter readability > style polish.
 
 BEFORE RETURNING — internal audit, do not print any of this reasoning, only the final output
@@ -312,7 +344,7 @@ ATS_BREAKDOWN: <a single JSON object, real JSON on one line, with these exact in
         {
           "title": "job title",
           "subtitle": "Company | Location",
-          "dateRight": "Month Year – Month Year",
+          "dateRight": "Month Year - Month Year",
           "bullets": ["rewritten bullet 1", "rewritten bullet 2"],
           "footer": "optional Tools: ... line, omit key if not applicable"
         }
@@ -362,7 +394,7 @@ Include only the sections that make sense for this resume's actual content — d
         if (!parsedResume || !parsedResume.name || !Array.isArray(parsedResume.sections)) {
           throw new Error('Tailored resume came back with an unexpected shape — please try again.');
         }
-        return { resume: parsedResume, atsScore: score, roleSimilarity, breakdown };
+        return { resume: sanitizeResumeContent(parsedResume), atsScore: score, roleSimilarity, breakdown };
       }
 
       async function runPass(userContent, timeoutMs, logTag, model) {
@@ -980,6 +1012,17 @@ JOB TITLE: ${jobDescription.title || ''}`;
       cache_control: { type: 'ephemeral' },
       text: `You are building a fully tailored resume. EXTRACT project synopses from ground truth, then REWRITE from scratch for the target role. Never invent employers, dates, or credentials not in the ground truth. Use STAR-shaped bullets with metrics where truthfully supported. No buzzwords.
 
+BULLET REBUILD - apply to every single experience bullet, no exceptions
+Do not carry over generic duties. Rebuild each bullet from the underlying project synopsis so it visibly answers a requirement in this JD:
+- Lead with the action and the JD's own terminology for the technology, domain, or responsibility involved, wherever the candidate's real evidence supports it.
+- State the scope or scale (users, volume, regions, team size, systems) and close with a measurable or concrete outcome whenever the ground truth supports one. Never invent a number.
+- Every bullet must be traceable to a JD requirement. If a bullet cannot be tied to anything the JD asks for, cut it and write a stronger one from the same role's real evidence instead.
+- Order bullets within each role so the ones matching Critical/High requirements come first.
+- Do not reuse the same leading verb more than twice across the whole resume.
+
+PUNCTUATION - hard rule
+Never use em dashes or en dashes anywhere in the output. Use commas, colons, or separate sentences instead. For date ranges use a plain hyphen, e.g. "Jan 2020 - Mar 2023".
+
 Respond in EXACTLY this JSON format, nothing else:
 {
   "name": "candidate name",
@@ -987,7 +1030,7 @@ Respond in EXACTLY this JSON format, nothing else:
   "sections": [
     { "heading": "PROFESSIONAL SUMMARY", "paragraphs": ["2-3 sentence summary"] },
     { "heading": "TECHNICAL SKILLS", "paragraphs": ["Category: skill, skill", "Category: skill"] },
-    { "heading": "PROFESSIONAL EXPERIENCE", "entries": [{ "title": "Role Title", "subtitle": "Company | Location", "dateRight": "Mon YYYY – Mon YYYY", "bullets": ["bullet 1", "bullet 2"], "footer": "Tools: optional" }] },
+    { "heading": "PROFESSIONAL EXPERIENCE", "entries": [{ "title": "Role Title", "subtitle": "Company | Location", "dateRight": "Mon YYYY - Mon YYYY", "bullets": ["bullet 1", "bullet 2"], "footer": "Tools: optional" }] },
     { "heading": "EDUCATION", "entries": [{ "title": "Degree", "subtitle": "School", "dateRight": "YYYY", "bullets": [] }] }
   ]
 }`
@@ -1009,7 +1052,7 @@ ${styleNote ? `STYLE DIRECTIVES: ${styleNote}` : ''}`;
       timeoutMs: 120000, logTag: 'agentBuild'
     });
 
-    const content = JSON.parse(stripJsonFence(raw));
+    const content = sanitizeResumeContent(JSON.parse(stripJsonFence(raw)));
 
     // Score match against requirements
     const contentText = JSON.stringify(content).toLowerCase();
