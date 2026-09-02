@@ -102,6 +102,48 @@ const BUILD_STAGES = {
   existing: ['Reading your base resume…', 'Analyzing the job description…', 'Rewriting against the JD…', 'Optimizing for ATS…'],
 };
 
+// Cute progress mascot — a cat typing away while the resume builds. Purely
+// decorative, so it carries aria-hidden and the real status stays in the log.
+function BuildCat({ done = false }) {
+  return (
+    <svg className={`build-cat${done ? ' done' : ''}`} viewBox="0 0 120 100" width="150" height="125" aria-hidden="true">
+      <ellipse className="cat-shadow" cx="60" cy="90" rx="30" ry="4.5" />
+      {/* desk */}
+      <rect x="18" y="74" width="84" height="6" rx="3" fill="var(--border-strong)" />
+      {/* tail */}
+      <path className="cat-tail" d="M82 70 q16 2 14 -12" stroke="var(--brand)" strokeWidth="5" strokeLinecap="round" fill="none" />
+      {/* body */}
+      <path className="cat-body" d="M34 74 q0 -22 26 -22 q26 0 26 22 z" fill="var(--brand)" />
+      {/* head */}
+      <g className="cat-head">
+        <path d="M40 40 l2 -13 l11 7 z" fill="var(--brand)" />
+        <path d="M80 40 l-2 -13 l-11 7 z" fill="var(--brand)" />
+        <ellipse cx="60" cy="44" rx="22" ry="18" fill="var(--brand)" />
+        <ellipse cx="60" cy="50" rx="10" ry="7" fill="var(--brand-soft)" />
+        {/* eyes */}
+        <g className="cat-eyes">
+          <ellipse cx="52" cy="42" rx="2.6" ry="3.2" fill="#fff" />
+          <ellipse cx="68" cy="42" rx="2.6" ry="3.2" fill="#fff" />
+        </g>
+        {/* nose + smile */}
+        <path d="M60 47 l-2.5 2 h5 z" fill="#fff" />
+        <path d="M56 52 q4 3 8 0" stroke="#fff" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+        {/* whiskers */}
+        <path d="M38 46 h9 M38 51 h9 M82 46 h-9 M82 51 h-9" stroke="var(--brand-soft)" strokeWidth="1.2" strokeLinecap="round" />
+      </g>
+      {/* paws tapping the desk */}
+      <ellipse className="cat-paw left" cx="46" cy="72" rx="6" ry="4.5" fill="var(--brand-soft)" />
+      <ellipse className="cat-paw right" cx="74" cy="72" rx="6" ry="4.5" fill="var(--brand-soft)" />
+      {/* little sparks of progress */}
+      <g className="cat-sparks">
+        <circle cx="96" cy="30" r="2.5" fill="var(--brand)" />
+        <circle cx="104" cy="20" r="1.8" fill="var(--brand)" />
+        <circle cx="92" cy="16" r="1.4" fill="var(--brand)" />
+      </g>
+    </svg>
+  );
+}
+
 export default function AgentView({ uid, state, setView, notify, credits, onCreditsChange }) {
   const { resumes, profileInfo, activeResumeId } = state;
   const { ensureGmailToken } = useAuth();
@@ -769,128 +811,19 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
             <span className="ws-col-status">{version ? `${(version.content?.sections || []).length} sections` : 'Nothing generated yet'}</span>
           </div>
 
-          <div className="result-shell">
-            {loading || regenerating ? (
-              <div className="gen-shell">
-                {buildLog.map((item, i) => (
-                  <div key={i} className={`gen-line${i < buildLog.length - 1 ? ' done' : ''}`} style={{ animationDelay: `${i * 60}ms` }}>
-                    {i < buildLog.length - 1 ? '✓ ' : '→ '}{item.text}
-                  </div>
-                ))}
-                {!buildLog.length && <div className="gen-line" style={{ opacity: 1 }}>Starting…</div>}
-              </div>
-            ) : !version ? (
-              <div className="gen-shell">
-                <div style={{ fontSize: 30, marginBottom: 10 }}>✦</div>
-                <div style={{ fontSize: 14, fontWeight: 650, color: 'var(--ink)', marginBottom: 4 }}>No result yet</div>
-                <p style={{ fontSize: 12.5, color: 'var(--ink-2)', maxWidth: 320, margin: '0 auto', lineHeight: 1.6 }}>
-                  Fill in the options on the left, then hit Generate. The result appears here without leaving this screen.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="result-head">
-                  <div>
-                    <div className={`result-score ats-tier-${scoreTier}`}>{score ?? '—'}</div>
-                    <div className="result-score-label">ATS match</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--ink)' }}>{scoreTierLabel}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{exportTitle()}</div>
-                  </div>
-                  <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--ink-2)', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={showHighlights} onChange={e => setShowHighlights(e.target.checked)} style={{ width: 'auto', accentColor: 'var(--brand)' }} />
-                    Highlight matches
-                  </label>
-                </div>
-
-                <div className="result-tabs">
-                  {[['resume', 'Preview'], ['changes', 'Changes'], ['matches', 'JD Match']].map(([t, label]) => {
-                    const badge = t === 'changes'
-                      ? (mode === 'scratch' ? (version.changes || []).length : diffOps.length)
-                      : t === 'matches' ? jdMatchRows.length : 0;
-                    return (
-                      <button key={t} className={`result-tab${reviewTab === t ? ' active' : ''}`} onClick={() => setReviewTab(t)}>
-                        {label}{badge > 0 && <span className="nav-badge" style={{ marginLeft: 5 }}>{badge}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="result-body">
-                  {reviewTab === 'resume' && (
-                    <div className="doc"><ResumePreview resume={{ ...version.content, highlights: highlightTerms }} showHighlights={showHighlights} /></div>
-                  )}
-
-                  {reviewTab === 'changes' && (
-                    <>
-                      {mode === 'scratch' ? (
-                        <>
-                          {(version.changes || []).map(c => (
-                            <div key={c.id} className="diff-block">
-                              <div className="diff-section-label">{c.section}</div>
-                              {c.beforeText && <div className="diff-line removed">{c.beforeText}</div>}
-                              <div className="diff-line added">{c.afterText}</div>
-                              {c.rationale && <div style={{ fontSize: 11, color: 'var(--ink-3)', fontStyle: 'italic', marginTop: 4 }}>{c.rationale}</div>}
-                            </div>
-                          ))}
-                          {!(version.changes?.length) && <div className="empty">No section-level changes recorded for this build.</div>}
-                          {version.changes?.length > 0 && (
-                            <div className="diff-count">{version.changes.length} change{version.changes.length === 1 ? '' : 's'} · nothing sent yet</div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <div className="diff-section-label">Base resume → tailored</div>
-                          {diffOps.map((op, i) => (
-                            <div key={i} className="diff-block" style={{ marginBottom: 6 }}>
-                              {op.left && <div className="diff-line removed">{op.left.startsWith('## ') ? op.left.slice(3) : op.left}</div>}
-                              {op.right && <div className="diff-line added">{op.right.startsWith('## ') ? op.right.slice(3) : op.right}</div>}
-                            </div>
-                          ))}
-                          {!diffOps.length && <div className="empty">No differences detected.</div>}
-                          {diffOps.length > 0 && (
-                            <div className="diff-count">{diffOps.length} change{diffOps.length === 1 ? '' : 's'} · nothing sent yet</div>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )}
-
-                  {reviewTab === 'matches' && (
-                    <>
-                      {jdMatchRows.map(m => (
-                        <div key={m.term} className="jdm-row">
-                          <div>
-                            <div style={{ fontWeight: 500, color: 'var(--ink)' }}>{m.term}</div>
-                            {m.meta && <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{m.meta}</div>}
-                          </div>
-                          <span className={`jdm-pill ${String(m.level).toLowerCase()}`}>{m.level}</span>
-                        </div>
-                      ))}
-                      {!jdMatchRows.length && <div className="empty">No requirement data available for this JD.</div>}
-                      {(version.flags || []).filter(f => f.status === 'needs_review').length > 0 && (
-                        <div style={{ marginTop: 16 }}>
-                          <div className="diff-section-label">Quality check</div>
-                          {(version.flags || []).filter(f => f.status === 'needs_review').map(f => (
-                            <div key={f.id} className="jdm-row">
-                              <div style={{ fontSize: 12.4 }}>{f.claimText}</div>
-                              <button className="btn btn-xs btn-primary" onClick={() => handleVerifyFlag(f.id)}>Verify ✓</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* ---- Export receipt + actions ---- */}
+          {/* ---- Export receipt + actions (above the preview) ---- */}
           {version && !loading && !regenerating && (
-            <div className="panel" style={{ marginTop: 14 }}>
-              <div className="receipt">
+            <div className="panel" style={{ marginBottom: 14 }}>
+              <div className="export-row">
+                <div className="seg-ctrl" style={{ flex: 'none' }}>
+                  {['pdf', 'docx'].map(f => <button key={f} className={exportFormat === f ? 'active' : ''} onClick={() => setExportFormat(f)}>{f.toUpperCase()}</button>)}
+                </div>
+                <button className="btn btn-primary" onClick={() => handleDownload(exportFormat)}>⇩ Download {exportFormat.toUpperCase()}</button>
+                <button className="btn btn-ghost" onClick={handleGenerateCoverLetter}>✎ Cover Letter</button>
+                <button className="btn btn-ghost" onClick={openEmailDraft}>✉ Draft Email</button>
+              </div>
+
+              <div className="receipt" style={{ marginTop: 12, marginBottom: 0 }}>
                 <div className="receipt-title">This export was built from</div>
                 {mode === 'scratch' ? (
                   <>
@@ -905,18 +838,6 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
                 )}
                 <div className="receipt-row"><span className="k">Keywords matched</span><span className="v">{jdMatchRows.filter(m => m.level !== 'MISSING').length} of {jdMatchRows.length}</span></div>
                 <div className="receipt-row"><span className="k">JD length</span><span className="v">{jdText.trim().length.toLocaleString()} chars</span></div>
-              </div>
-
-              <div className="field">
-                <label className="field-label">Format</label>
-                <div className="seg-ctrl" style={{ width: '100%' }}>
-                  {['pdf', 'docx'].map(f => <button key={f} className={exportFormat === f ? 'active' : ''} onClick={() => setExportFormat(f)}>{f.toUpperCase()}</button>)}
-                </div>
-              </div>
-              <button className="btn btn-primary btn-full" style={{ marginBottom: 8 }} onClick={() => handleDownload(exportFormat)}>⇩ Download {exportFormat.toUpperCase()}</button>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={handleGenerateCoverLetter}>✎ Cover Letter</button>
-                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={openEmailDraft}>✉ Draft Email</button>
               </div>
 
               {coverLetterOpen && (
@@ -950,6 +871,90 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
               )}
             </div>
           )}
+
+          <div className="result-shell">
+            {loading || regenerating ? (
+              <div className="gen-shell">
+                <BuildCat />
+                <div className="gen-log">
+                  {buildLog.map((item, i) => (
+                    <div key={i} className={`gen-line${i < buildLog.length - 1 ? ' done' : ''}`} style={{ animationDelay: `${i * 60}ms` }}>
+                      {i < buildLog.length - 1 ? '✓ ' : '→ '}{item.text}
+                    </div>
+                  ))}
+                  {!buildLog.length && <div className="gen-line" style={{ opacity: 1 }}>Starting…</div>}
+                </div>
+              </div>
+            ) : !version ? (
+              <div className="gen-shell">
+                <BuildCat done />
+                <div style={{ fontSize: 14, fontWeight: 650, color: 'var(--ink)', margin: '4px 0' }}>Ready when you are</div>
+                <p style={{ fontSize: 12.5, color: 'var(--ink-2)', maxWidth: 320, margin: '0 auto', lineHeight: 1.6 }}>
+                  Fill in the options on the left, then hit Generate. The result appears here without leaving this screen.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="result-head">
+                  <div>
+                    <div className={`result-score ats-tier-${scoreTier}`}>{score ?? '—'}</div>
+                    <div className="result-score-label">ATS match</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--ink)' }}>{scoreTierLabel}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{exportTitle()}</div>
+                  </div>
+                  <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={showHighlights} onChange={e => setShowHighlights(e.target.checked)} style={{ width: 'auto', accentColor: 'var(--brand)' }} />
+                    Highlight matches
+                  </label>
+                </div>
+
+                <div className="result-tabs">
+                  {[['resume', 'Preview'], ['matches', 'JD Match']].map(([t, label]) => {
+                    const badge = t === 'matches' ? jdMatchRows.length : 0;
+                    return (
+                      <button key={t} className={`result-tab${reviewTab === t ? ' active' : ''}`} onClick={() => setReviewTab(t)}>
+                        {label}{badge > 0 && <span className="nav-badge" style={{ marginLeft: 5 }}>{badge}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="result-body">
+                  {reviewTab === 'resume' && (
+                    <div className="doc"><ResumePreview resume={{ ...version.content, highlights: highlightTerms }} showHighlights={showHighlights} /></div>
+                  )}
+
+                  {reviewTab === 'matches' && (
+                    <>
+                      {jdMatchRows.map(m => (
+                        <div key={m.term} className="jdm-row">
+                          <div>
+                            <div style={{ fontWeight: 500, color: 'var(--ink)' }}>{m.term}</div>
+                            {m.meta && <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{m.meta}</div>}
+                          </div>
+                          <span className={`jdm-pill ${String(m.level).toLowerCase()}`}>{m.level}</span>
+                        </div>
+                      ))}
+                      {!jdMatchRows.length && <div className="empty">No requirement data available for this JD.</div>}
+                      {(version.flags || []).filter(f => f.status === 'needs_review').length > 0 && (
+                        <div style={{ marginTop: 16 }}>
+                          <div className="diff-section-label">Quality check</div>
+                          {(version.flags || []).filter(f => f.status === 'needs_review').map(f => (
+                            <div key={f.id} className="jdm-row">
+                              <div style={{ fontSize: 12.4 }}>{f.claimText}</div>
+                              <button className="btn btn-xs btn-primary" onClick={() => handleVerifyFlag(f.id)}>Verify ✓</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </section>

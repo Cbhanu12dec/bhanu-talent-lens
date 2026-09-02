@@ -1111,10 +1111,44 @@ tbody tr:hover{background:var(--bg);}
 .jdm-pill.missing{background:var(--bad-soft);color:var(--bad);}
 
 /* Generating activity log */
-.gen-shell{padding:34px 20px;text-align:center;}
+.gen-shell{padding:28px 20px 34px;text-align:center;}
+.gen-log{margin-top:6px;}
 .gen-line{font-size:12.8px;color:var(--ink-2);padding:5px 0;opacity:0;animation:genIn .35s forwards;}
 .gen-line.done{color:var(--ink);}
 @keyframes genIn{to{opacity:1;}}
+
+/* Progress mascot — a cat typing the resume while the build runs */
+.build-cat{display:block;margin:0 auto 4px;overflow:visible;}
+.build-cat .cat-body,.build-cat .cat-head{transform-origin:60px 74px;animation:catBob 1.1s ease-in-out infinite;}
+.build-cat .cat-head{animation-name:catNod;animation-duration:2.2s;}
+.build-cat .cat-tail{transform-origin:82px 70px;animation:catTail 1.4s ease-in-out infinite;}
+.build-cat .cat-paw.left{animation:catTap .42s ease-in-out infinite;}
+.build-cat .cat-paw.right{animation:catTap .42s ease-in-out .21s infinite;}
+.build-cat .cat-eyes{transform-origin:60px 42px;animation:catBlink 3.4s ease-in-out infinite;}
+.build-cat .cat-shadow{fill:var(--ink);opacity:.07;animation:catShadow 1.1s ease-in-out infinite;}
+.build-cat .cat-sparks circle{opacity:0;animation:catSpark 1.6s ease-out infinite;}
+.build-cat .cat-sparks circle:nth-child(2){animation-delay:.35s;}
+.build-cat .cat-sparks circle:nth-child(3){animation-delay:.7s;}
+
+/* Idle: mascot rests, no typing or sparks */
+.build-cat.done .cat-paw,.build-cat.done .cat-sparks circle{animation:none;}
+.build-cat.done .cat-body,.build-cat.done .cat-head{animation-duration:3.4s;}
+
+@keyframes catBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-2px);}}
+@keyframes catNod{0%,100%{transform:translateY(0) rotate(0deg);}30%{transform:translateY(-1.5px) rotate(-3deg);}60%{transform:translateY(-1px) rotate(3deg);}}
+@keyframes catTail{0%,100%{transform:rotate(0deg);}50%{transform:rotate(-18deg);}}
+@keyframes catTap{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+@keyframes catBlink{0%,92%,100%{transform:scaleY(1);}96%{transform:scaleY(.1);}}
+@keyframes catShadow{0%,100%{transform:scaleX(1);opacity:.07;}50%{transform:scaleX(.92);opacity:.05;}}
+@keyframes catSpark{0%{opacity:0;transform:translateY(4px) scale(.6);}40%{opacity:.9;}100%{opacity:0;transform:translateY(-10px) scale(1);}}
+
+@media(prefers-reduced-motion:reduce){
+  .build-cat *{animation:none !important;}
+}
+
+/* Export action row — sits above the preview */
+.export-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.export-row .seg-ctrl{flex:none;}
 
 /* Export receipt */
 .receipt{background:var(--surface-sunken);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:12px;}
