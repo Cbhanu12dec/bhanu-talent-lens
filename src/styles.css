@@ -1015,14 +1015,20 @@ tbody tr:hover{background:var(--bg);}
 .ws-col-num{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--brand);background:var(--brand-soft);padding:3px 8px;border-radius:99px;}
 .ws-col-status{margin-left:auto;font-size:11.5px;color:var(--ink-2);font-weight:500;}
 
-/* Select column: options scroll, the footer stays put. */
-.ws-select{position:sticky;top:16px;display:flex;flex-direction:column;max-height:calc(100vh - 32px);}
+/* Select column: options scroll, the footer stays put. Offsets account for the
+   sticky topbar, otherwise the pinned footer lands below the viewport. */
+.ws-select{
+  position:sticky;top:calc(var(--topbar-h) + 16px);
+  display:flex;flex-direction:column;
+  max-height:calc(100dvh - var(--topbar-h) - 32px);
+}
 .opt-scroll{flex:1;min-height:0;overflow-y:auto;padding-right:6px;}
 .opt-scroll::-webkit-scrollbar{width:6px;}
 .opt-scroll::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:99px;}
 
 .opt-footer{flex:none;padding-top:12px;margin-top:4px;border-top:1px solid var(--border);background:var(--bg);}
 .opt-footer .opt-block{margin-bottom:8px;}
+.opt-footer textarea{max-height:110px;}
 
 @media(max-width:1100px){
   .ws-select{position:static;max-height:none;display:block;}
@@ -1030,7 +1036,7 @@ tbody tr:hover{background:var(--bg);}
   .opt-footer{position:static;}
 }
 
-.ws-result{position:sticky;top:16px;}
+.ws-result{position:sticky;top:calc(var(--topbar-h) + 16px);}
 @media(max-width:1100px){.ws-result{position:static;}}
 
 /* Collapsible option blocks in the Select column */
@@ -1086,7 +1092,7 @@ tbody tr:hover{background:var(--bg);}
 .result-tab{background:none;border:none;padding:10px 14px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer;border-bottom:2px solid transparent;}
 .result-tab:hover{color:var(--ink);}
 .result-tab.active{color:var(--brand);border-bottom-color:var(--brand);}
-.result-body{padding:18px;max-height:calc(100vh - 320px);overflow-y:auto;}
+.result-body{padding:18px;max-height:calc(100dvh - var(--topbar-h) - 220px);overflow-y:auto;}
 
 /* Changes tab diff */
 .diff-block{margin-bottom:16px;}
