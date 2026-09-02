@@ -631,11 +631,11 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
               <div className="start-tiles">
                 <button className={`start-tile${mode === 'existing' ? ' selected' : ''}`} onClick={() => setMode('existing')}>
                   <div className="start-tile-title">Tailor existing</div>
-                  <div className="start-tile-desc">Rewrite a resume you already have</div>
+                  <div className="start-tile-desc">From a resume you have</div>
                 </button>
                 <button className={`start-tile${mode === 'scratch' ? ' selected' : ''}`} onClick={() => setMode('scratch')}>
                   <div className="start-tile-title">Build from scratch</div>
-                  <div className="start-tile-desc">Generate from your Career Profile</div>
+                  <div className="start-tile-desc">From your Career Profile</div>
                 </button>
               </div>
 

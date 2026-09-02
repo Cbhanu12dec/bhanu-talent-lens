@@ -138,7 +138,12 @@ input,textarea,select{font-family:inherit;font-size:14px;}
   display:flex;align-items:center;justify-content:space-between;padding:0 22px;
   position:sticky;top:0;z-index:30;
 }
-.main,.content{padding:26px 30px 60px;max-width:1400px;}
+.main,.content{padding:26px 30px 60px;max-width:1680px;}
+/* Reclaim horizontal room before the layout starts feeling cramped. */
+@media(max-width:1550px){
+  .main,.content{padding:22px 20px 60px;}
+  :root{--sidebar-w:206px;}
+}
 
 /* ============================================================ BRAND */
 .brand,.logo{display:flex;align-items:center;gap:9px;padding:4px 8px 18px;}
@@ -1061,8 +1066,11 @@ tbody tr:hover{background:var(--bg);}
    Left column = Select, scrolls independently. Right column = Result,
    sticky. Deliberately NOT sequential pages — see spec §3.
    ============================================================ */
-.ws-split{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:20px;align-items:start;}
-@media(max-width:1100px){.ws-split{grid-template-columns:1fr;}}
+/* The Select column scales with the viewport rather than sitting at a fixed
+   cap, so it keeps the same breathing room at 100% that it had zoomed out.
+   Clamped so it can't swallow the preview on very wide screens. */
+.ws-split{display:grid;grid-template-columns:clamp(420px,38%,560px) minmax(0,1fr);gap:24px;align-items:start;}
+@media(max-width:1100px){.ws-split{grid-template-columns:1fr;gap:16px;}}
 
 .ws-col-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
 .ws-col-num{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--brand);background:var(--brand-soft);padding:3px 8px;border-radius:99px;}
@@ -1094,16 +1102,16 @@ tbody tr:hover{background:var(--bg);}
 
 /* Collapsible option blocks in the Select column */
 .opt-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden;}
-.opt-block-head{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;user-select:none;}
+.opt-block-head{display:flex;align-items:center;gap:8px;padding:14px 16px;cursor:pointer;user-select:none;}
 .opt-block-head:hover{background:var(--surface-sunken);}
 .opt-block-title{font-size:13px;font-weight:650;color:var(--ink);}
 .opt-block-sub{font-size:11px;color:var(--ink-3);margin-left:auto;text-align:right;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .opt-block-chev{color:var(--ink-3);font-size:11px;flex:none;}
-.opt-block-body{padding:0 14px 14px;border-top:1px solid var(--border);padding-top:14px;}
+.opt-block-body{padding:0 16px 16px;border-top:1px solid var(--border);padding-top:16px;}
 
 /* Start-point tiles */
 .start-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.start-tile{border:1.5px solid var(--border-strong);border-radius:var(--r-sm);padding:12px;cursor:pointer;transition:.12s;background:var(--surface);text-align:left;}
+.start-tile{border:1.5px solid var(--border-strong);border-radius:var(--r-sm);padding:14px 15px;cursor:pointer;transition:.12s;background:var(--surface);text-align:left;}
 .start-tile:hover{border-color:var(--brand);}
 .start-tile.selected{border-color:var(--brand);background:var(--brand-soft);}
 .start-tile-title{font-size:12.6px;font-weight:650;color:var(--ink);}
