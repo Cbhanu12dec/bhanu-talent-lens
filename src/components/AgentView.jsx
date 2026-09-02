@@ -191,8 +191,11 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   const [buildDone, setBuildDone] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
-  // Review state
-  const [version, setVersion] = useState(null);
+  // Review state — every generate appends to history so earlier drafts stay
+  // reachable instead of being overwritten.
+  const [history, setHistory] = useState([]);
+  const [historyIdx, setHistoryIdx] = useState(0);
+  const version = history[historyIdx]?.version || null;
   const [reviewTab, setReviewTab] = useState('resume');
   const [showHighlights, setShowHighlights] = useState(true);
   const [rebuildSections, setRebuildSections] = useState({ summary: true, experience: true });
@@ -251,8 +254,21 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     setBuildStageIdx(i => i + 1);
   }
 
+  // Each generate is a fresh build from source, so drafts are appended rather
+  // than replaced — the user can page back to any earlier one.
+  function pushVersion(v, label) {
+    setHistory(prev => {
+      const next = [...prev, { version: v, label, at: new Date() }];
+      setHistoryIdx(next.length - 1);
+      return next;
+    });
+  }
+  function patchCurrentVersion(patch) {
+    setHistory(prev => prev.map((h, i) => i === historyIdx ? { ...h, version: { ...h.version, ...patch(h.version) } } : h));
+  }
+
   function resetBuildState() {
-    setBuildLog([]); setBuildDone(false); setVersion(null); setBuildStageIdx(0);
+    setBuildLog([]); setBuildDone(false); setHistory([]); setHistoryIdx(0); setBuildStageIdx(0);
     setJobDescription(null); setFindings(null); setStrategy(null);
     setJdIntel(null); setDiffOps([]);
     setCoverLetterOpen(false); setCoverLetterText(''); setEmailOpen(false); setSendSuccess(false);
@@ -290,7 +306,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
       addLog(`Build complete — match score ${matchScore}%`);
       setBuildDone(true);
       const v = await getResumeVersion(uid, versionId);
-      setVersion(v);
+      pushVersion(v, 'Initial build');
       if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
       notify?.({ kind: 'good', title: 'Resume built', detail: `ATS match score: ${matchScore}%` });
       setReviewTab('resume');
@@ -318,7 +334,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
       });
       addLog(`Build complete — match score ${matchScore}%`);
       const v = await getResumeVersion(uid, versionId);
-      setVersion(v);
+      pushVersion(v, 'Rebuild');
       if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
     } catch (err) {
       console.error(err);
@@ -344,7 +360,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
       }
 
       addLog(BUILD_STAGES.existing[2]); advanceStage();
-      await generateTailoredVersion(baseResume, customInstructions.trim() ? [customInstructions.trim()] : []);
+      await generateTailoredVersion(baseResume, customInstructions.trim() ? [customInstructions.trim()] : [], undefined, 'Initial tailor');
       advanceStage();
       setReviewTab('resume');
     } catch (err) {
@@ -356,7 +372,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     setLoading(false);
   }
 
-  async function generateTailoredVersion(baseR, extraPrompts = [], intensityOverride) {
+  async function generateTailoredVersion(baseR, extraPrompts = [], intensityOverride, label = 'Tailored') {
     const { resume, atsScore, creditsRemaining } = await tailorResume({
       jdText: jdText.trim(), resumeText: baseR.text,
       prompts: [...(baseR.prompts || []), ...extraPrompts],
@@ -369,7 +385,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     const newLines = resumeToLines(resume);
     setDiffOps(diffLines(oldLines, newLines).filter(op => op.type !== 'same'));
 
-    setVersion({ id: `tailor_${Date.now()}`, content: resume, matchScore: atsScore, changes: null, requirementMatches: null, flags: null });
+    pushVersion({ id: `tailor_${Date.now()}`, content: resume, matchScore: atsScore, changes: null, requirementMatches: null, flags: null }, label);
     if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
     notify?.({ kind: 'good', title: 'Resume tailored', detail: `ATS match score: ${atsScore}%` });
     return resume;
@@ -380,7 +396,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     setRegenerating(true); setError('');
     addLog('Re-tailoring with your instructions…');
     try {
-      await generateTailoredVersion(baseResume, customInstructions.trim() ? [customInstructions.trim()] : []);
+      await generateTailoredVersion(baseResume, customInstructions.trim() ? [customInstructions.trim()] : [], undefined, 'Re-tailored');
     } catch (err) {
       console.error(err);
       setError(err.message || 'Re-tailor failed.');
@@ -412,13 +428,13 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
         });
         addLog('Scoring match…');
         const v = await getResumeVersion(uid, versionId);
-        setVersion(v);
+        pushVersion(v, 'Refined');
         if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
         notify?.({ kind: 'good', title: 'Resume rebuilt', detail: `ATS match score: ${matchScore}%` });
       } else {
         if (!baseResume) throw new Error('Base resume missing — start a new run.');
         addLog('Rewriting bullets against the JD…');
-        await generateTailoredVersion(baseResume, directive ? [directive] : [], 'aggressive');
+        await generateTailoredVersion(baseResume, directive ? [directive] : [], 'aggressive', 'Refined');
       }
       setSelectedKeywords([]);
     } catch (err) {
@@ -492,19 +508,19 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     if (!version || mode !== 'scratch') return;
     const changes = (version.changes || []).map(c => c.id === changeId ? { ...c, status } : c);
     await updateResumeVersionChanges(uid, version.id, changes);
-    setVersion(v => ({ ...v, changes }));
+    patchCurrentVersion(() => ({ changes }));
   }
   async function handleAcceptAll() {
     if (!version || mode !== 'scratch') return;
     const changes = (version.changes || []).map(c => ({ ...c, status: 'accepted' }));
     await updateResumeVersionChanges(uid, version.id, changes);
-    setVersion(v => ({ ...v, changes }));
+    patchCurrentVersion(() => ({ changes }));
     notify?.({ kind: 'good', title: 'All changes accepted', detail: '' });
   }
   async function handleVerifyFlag(flagId) {
     if (!version || mode !== 'scratch') return;
     await updateQualityFlag(uid, version.id, flagId, { status: 'verified' });
-    setVersion(v => ({ ...v, flags: (v.flags || []).map(f => f.id === flagId ? { ...f, status: 'verified' } : f) }));
+    patchCurrentVersion(v => ({ flags: (v.flags || []).map(f => f.id === flagId ? { ...f, status: 'verified' } : f) }));
   }
 
   function handleReset() {
@@ -801,6 +817,11 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
                   : 'Pick a base resume.'}
               </div>
             )}
+            {version && canAdvance && !loading && !regenerating && (
+              <div className="field-hint" style={{ marginTop: 6, textAlign: 'center' }}>
+                Rebuilds from your {mode === 'scratch' ? 'Career Profile' : 'base resume'}, not from the draft on screen. Earlier drafts stay available above.
+              </div>
+            )}
           </div>
         </div>
 
@@ -838,6 +859,9 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
                 )}
                 <div className="receipt-row"><span className="k">Keywords matched</span><span className="v">{jdMatchRows.filter(m => m.level !== 'MISSING').length} of {jdMatchRows.length}</span></div>
                 <div className="receipt-row"><span className="k">JD length</span><span className="v">{jdText.trim().length.toLocaleString()} chars</span></div>
+                {history.length > 1 && (
+                  <div className="receipt-row"><span className="k">Draft</span><span className="v">{history[historyIdx]?.label} · v{historyIdx + 1} of {history.length}</span></div>
+                )}
               </div>
 
               {coverLetterOpen && (
@@ -900,11 +924,23 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
                     <div className={`result-score ats-tier-${scoreTier}`}>{score ?? '—'}</div>
                     <div className="result-score-label">ATS match</div>
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--ink)' }}>{scoreTierLabel}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{exportTitle()}</div>
                   </div>
-                  <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--ink-2)', cursor: 'pointer' }}>
+
+                  {history.length > 1 && (
+                    <div className="ver-nav" title="Every generate is kept — page back to compare earlier drafts">
+                      <button className="ver-btn" disabled={historyIdx === 0} onClick={() => setHistoryIdx(i => Math.max(0, i - 1))}>‹</button>
+                      <div className="ver-label">
+                        <span className="ver-name">{history[historyIdx]?.label}</span>
+                        <span className="ver-count">v{historyIdx + 1} of {history.length}</span>
+                      </div>
+                      <button className="ver-btn" disabled={historyIdx === history.length - 1} onClick={() => setHistoryIdx(i => Math.min(history.length - 1, i + 1))}>›</button>
+                    </div>
+                  )}
+
+                  <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--ink-2)', cursor: 'pointer', flexShrink: 0 }}>
                     <input type="checkbox" checked={showHighlights} onChange={e => setShowHighlights(e.target.checked)} style={{ width: 'auto', accentColor: 'var(--brand)' }} />
                     Highlight matches
                   </label>
