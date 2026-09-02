@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 
 const WORKSPACE_NAV = [
   { key: 'dashboard',    icon: '▦', label: 'Dashboard' },
-  { key: 'agent',        icon: '✦', label: 'Build / Tailor Resume', badge: 'NEW' },
+  { key: 'agent',        icon: '✦', label: 'Resume Studio', badge: 'NEW' },
 ];
 const LIBRARY_NAV = [
   { key: 'resumes',      icon: '▤', label: 'Resumes' },

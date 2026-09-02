@@ -610,7 +610,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   return (
     <section>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-        <h1 className="page-title">✦ Build / Tailor Resume</h1>
+        <h1 className="page-title">✦ Resume Studio</h1>
         {version && <button className="btn btn-ghost btn-sm" onClick={handleReset}>← New run</button>}
       </div>
       <p className="page-sub">Configure on the left, see the result on the right. Nothing navigates away.</p>

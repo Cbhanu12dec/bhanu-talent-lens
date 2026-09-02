@@ -14,7 +14,7 @@ export default function CommandPalette({ setView }) {
 
   const commands = [
     { id: 'dashboard', label: 'Go to Dashboard', group: 'Navigate', run: () => setView('dashboard') },
-    { id: 'agent', label: 'Build / Tailor Resume', group: 'Navigate', run: () => setView('agent') },
+    { id: 'agent', label: 'Go to Resume Studio', group: 'Navigate', run: () => setView('agent') },
     { id: 'careerprofile', label: 'Go to Career Profile', group: 'Navigate', run: () => setView('careerprofile') },
     { id: 'resumes', label: 'Go to Resumes', group: 'Navigate', run: () => setView('resumes') },
     { id: 'billing', label: 'Go to Billing', group: 'Navigate', run: () => setView('billing') },
