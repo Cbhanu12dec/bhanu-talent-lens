@@ -135,16 +135,16 @@ input,textarea,select{font-family:inherit;font-size:14px;}
 :focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
 
 /* ============================================================ LAYOUT */
-.shell{display:flex;min-height:100dvh;background:var(--page-bg);}
+.shell{display:flex;min-height:100dvh;background:var(--bg);}
 .side,.sidebar{
-  width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--frame);color:var(--ink-2);
+  width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--card);color:var(--ink-2);
   height:100dvh;position:sticky;top:0;overflow-y:auto;display:flex;flex-direction:column;
-  padding:18px 12px 16px;scrollbar-width:none;border-right:1px solid var(--card-border);
+  padding:18px 12px 16px;scrollbar-width:none;border-right:1px solid var(--border);
 }
 .side::-webkit-scrollbar,.sidebar::-webkit-scrollbar{display:none;}
 .main-col{flex:1;min-width:0;display:flex;flex-direction:column;}
 .topbar{
-  height:var(--topbar-h);flex:0 0 var(--topbar-h);background:var(--frame);border-bottom:1px solid var(--card-border);
+  height:var(--topbar-h);flex:0 0 var(--topbar-h);background:var(--card);border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;padding:0 22px;
   position:sticky;top:0;z-index:30;
 }
@@ -159,7 +159,7 @@ input,textarea,select{font-family:inherit;font-size:14px;}
 .brand,.logo{display:flex;align-items:center;gap:9px;padding:4px 8px 18px;}
 .logo-mark,.brand-mark{
   width:28px;height:28px;border-radius:8px;
-  background:var(--olive);
+  background:var(--brand);
   display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex:none;
 }
 .logo-text,.brand-text{display:flex;flex-direction:column;line-height:1.15;}
@@ -211,7 +211,7 @@ input,textarea,select{font-family:inherit;font-size:14px;}
   background:var(--brand-soft);
   color:var(--ink);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;
 }
-.avatar.admin{background:var(--butter);color:var(--admin);}
+.avatar.admin{background:var(--warn-soft);color:var(--admin);}
 .avatar-sm{width:30px;height:30px;font-size:11px;}
 
 /* ============================================================ TOPBAR */
@@ -251,7 +251,7 @@ h1.page-title{font-size:22px;font-weight:650;letter-spacing:-.015em;margin:0 0 4
 .eyebrow{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--primary);}
 .admin-banner{
   display:flex;align-items:center;gap:9px;background:var(--admin-subtle);color:var(--admin);
-  border:1px solid #F3D9AE;padding:10px 14px;border-radius:var(--r-card);font-size:12.6px;font-weight:600;margin-bottom:20px;
+  border:1px solid transparent;padding:10px 14px;border-radius:var(--r-card);font-size:12.6px;font-weight:600;margin-bottom:20px;
 }
 .panel-head h2,.section-title-row h2{font-size:15px;font-weight:650;}
 .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
@@ -284,7 +284,7 @@ h1.page-title{font-size:22px;font-weight:650;letter-spacing:-.015em;margin:0 0 4
 .btn-primary{background:var(--primary);color:#fff;}
 .btn-primary:hover{background:var(--primary-hover);}
 .btn-admin{background:var(--admin);color:#fff;}
-.btn-admin:hover{background:#96450A;}
+.btn-admin:hover{background:var(--warn);}
 .btn-secondary,.btn-ghost{background:var(--surface);color:var(--text);border-color:var(--border-strong);}
 .btn-ghost{background:transparent;color:var(--text-secondary);}
 .btn-ghost:hover{background:var(--bg);color:var(--text);}
@@ -394,7 +394,7 @@ tbody tr:hover{background:var(--bg);}
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);
   padding:16px 18px;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:.14s;
 }
-.qs-card:hover{border-color:var(--primary);box-shadow:0 2px 14px rgba(24,59,58,.08);transform:translateY(-1px);}
+.qs-card:hover{border-color:var(--primary);box-shadow:0 2px 14px var(--navy-shadow);transform:translateY(-1px);}
 .qs-icon{width:34px;height:34px;border-radius:8px;background:var(--primary-subtle);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:16px;}
 .qs-title{font-weight:600;font-size:13.6px;}
 .qs-desc{font-size:12.3px;color:var(--text-secondary);}
@@ -431,7 +431,7 @@ tbody tr:hover{background:var(--bg);}
 .progress-item .pt{font-size:12.8px;font-weight:600;}
 .progress-item.pending .pt{color:var(--text-muted);font-weight:500;}
 .progress-item .ps{font-size:11.3px;color:var(--text-muted);margin-top:1px;}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(40,96,93,.35);}70%{box-shadow:0 0 0 6px rgba(40,96,93,0);}100%{box-shadow:0 0 0 0 rgba(40,96,93,0);}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 var(--brand-shadow);}70%{box-shadow:0 0 0 6px rgba(20,121,255,0);}100%{box-shadow:0 0 0 0 rgba(20,121,255,0);}}
 .activity-item{padding:9px 0;border-bottom:1px solid var(--border);}
 .activity-item:last-child{border-bottom:none;}
 .activity-item .time{font-size:10.8px;color:var(--text-muted);font-weight:600;margin-bottom:3px;}
@@ -458,7 +458,7 @@ tbody tr:hover{background:var(--bg);}
 .hl-term{background:var(--brand-soft);color:var(--primary);padding:0 3px;border-radius:3px;font-weight:600;}
 .chip-row{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px;}
 .chip{font-size:11.3px;font-weight:600;background:var(--bg);border:1px solid var(--border);padding:4px 10px;border-radius:99px;color:var(--text-secondary);}
-.chip.match,.chip.locked{background:var(--admin-subtle);color:var(--admin);border-color:#F3D9AE;}
+.chip.match,.chip.locked{background:var(--admin-subtle);color:var(--admin);border-color:transparent;}
 .chip.add{border-style:dashed;color:var(--primary);cursor:pointer;}
 .chip.add:hover{background:var(--primary-subtle);}
 .chip.editable{border-style:dashed;cursor:pointer;}
@@ -747,7 +747,7 @@ html[data-theme="dark"] .doc,html[data-theme="dark"] .paper{background:var(--car
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);
   padding:18px;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:.14s;
 }
-.quick-start-card:hover{border-color:var(--primary);transform:translateY(-1px);box-shadow:0 2px 14px rgba(24,59,58,.08);}
+.quick-start-card:hover{border-color:var(--primary);transform:translateY(-1px);box-shadow:0 2px 14px var(--navy-shadow);}
 .quick-start-icon{width:36px;height:36px;border-radius:8px;background:var(--primary-subtle);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:17px;}
 
 /* ============================================================
@@ -1209,7 +1209,7 @@ html[data-theme="dark"] .doc,html[data-theme="dark"] .paper{background:var(--car
 .receipt-row .k{color:var(--ink-3);}
 .receipt-row .v{color:var(--ink);font-weight:600;text-align:right;}
 
-.ws-warn{display:flex;align-items:center;gap:9px;background:var(--warn-soft);border:1px solid #F3D9AE;color:var(--warn);border-radius:var(--r-sm);padding:9px 12px;font-size:12px;margin-top:10px;}
+.ws-warn{display:flex;align-items:center;gap:9px;background:var(--warn-soft);border:1px solid transparent;color:var(--warn);border-radius:var(--r-sm);padding:9px 12px;font-size:12px;margin-top:10px;}
 .ws-warn a{color:var(--warn);font-weight:650;text-decoration:underline;cursor:pointer;margin-left:auto;white-space:nowrap;}
 
 /* Dashboard status card (design spec §2.2) — the single entry point */
@@ -1223,113 +1223,10 @@ html[data-theme="dark"] .doc,html[data-theme="dark"] .paper{background:var(--car
 .status-card-row .none{color:var(--ink-3);font-weight:400;font-style:italic;}
 .status-card-row a{color:var(--brand);font-weight:650;font-size:12px;cursor:pointer;white-space:nowrap;}
 .status-card-row a:hover{text-decoration:underline;}
-.publish-guard{display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid #F3D9AE;color:var(--warn);border-radius:var(--r-sm);padding:8px 11px;font-size:11.8px;font-weight:600;margin-top:12px;}
+.publish-guard{display:flex;align-items:center;gap:8px;background:var(--warn-soft);border:1px solid transparent;color:var(--warn);border-radius:var(--r-sm);padding:8px 11px;font-size:11.8px;font-weight:600;margin-top:12px;}
 
 @media(max-width:700px){.status-card{flex-direction:column;align-items:stretch;}}
 
-/* ============================================================
-   SAGE + INK + PASTELS — design system components
-   Borders separate; shadow is a whisper. Pastels are decorative
-   variety only and never encode status (see status pills below).
-   ============================================================ */
-
-/* Weight discipline: 700 is reserved for the logo. */
-h1.page-title{font-size:21px;font-weight:650;letter-spacing:-.015em;color:var(--ink);}
-.dash-greeting{font-size:24px;font-weight:650;letter-spacing:-.02em;color:var(--ink);}
-.card-heading{font-size:16px;font-weight:650;color:var(--ink);}
-.eyebrow{font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);}
-
-/* ---- Buttons: compact, 8px radius, no gradients ---- */
-.btn{height:38px;border-radius:var(--r-btn);font-weight:600;}
-.btn-sm{height:32px;}
-.btn-xs{height:26px;}
-.btn-primary{background:var(--brand);color:#fff;border-color:var(--brand);}
-.btn-primary:hover{background:var(--brand-hover);border-color:var(--brand-hover);}
-.btn-text{background:none;border:none;color:var(--brand);font-weight:600;padding:0;height:auto;}
-.btn-text:hover{color:var(--brand-hover);text-decoration:underline;}
-/* AI actions are marked by the glyph, not by a special button treatment. */
-.ai-glyph{color:var(--brand);margin-right:5px;}
-
-/* ---- Filter pills ---- */
-.pill-btn{
-  height:38px;padding:0 16px;border-radius:var(--r-pill);
-  background:var(--surface);border:1px solid var(--border-strong);color:var(--text-2);
-  font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.12s;
-}
-.pill-btn:hover{border-color:var(--brand);color:var(--ink);}
-.pill-btn.selected{background:var(--brand-soft);border-color:#AFCBC5;color:var(--ink);font-weight:600;}
-.pill-row{display:flex;flex-wrap:wrap;gap:8px;}
-
-/* ---- Status pills: dedicated tokens, kept apart from the pastels ---- */
-.status-pill{
-  display:inline-flex;align-items:center;gap:5px;
-  font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:var(--r-pill);
-}
-.status-pill::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;}
-.status-pill.ready{background:var(--status-ready-bg);color:var(--status-ready-text);}
-.status-pill.applied{background:var(--status-applied-bg);color:var(--status-applied-text);}
-.status-pill.tailoring{background:var(--status-tailoring-bg);color:var(--status-tailoring-text);}
-.status-pill.tailoring::before{content:"✦";width:auto;height:auto;background:none;font-size:9px;}
-.status-pill.needs{background:var(--status-needs-bg);color:var(--status-needs-text);}
-
-/* ---- Mini match ring: the default size for any match score ---- */
-.mini-ring{width:44px;height:44px;position:relative;flex:none;}
-.mini-ring svg{transform:rotate(-90deg);display:block;}
-.mini-ring .track{stroke:var(--border-strong);}
-.mini-ring .prog{stroke:var(--brand);stroke-linecap:round;transition:stroke-dashoffset .5s;}
-.mini-ring .num{
-  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:12px;font-weight:650;color:var(--ink);
-}
-
-/* ---- Linear match bar: only inside a dedicated match-analysis card ---- */
-.match-linear .pct{font-size:32px;font-weight:650;color:var(--ink);letter-spacing:-.02em;line-height:1;}
-.match-linear .track{height:6px;background:var(--border-strong);border-radius:var(--r-pill);overflow:hidden;margin:10px 0 14px;}
-.match-linear .fill{height:100%;background:var(--brand);border-radius:var(--r-pill);transition:width .5s;}
-.match-linear .row{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:var(--text-2);}
-.match-linear .row b{color:var(--ink);font-weight:600;}
-
-/* ---- Pastel cards: hue rotates for variety, carries no meaning ---- */
-.pastel-card{
-  border-radius:var(--r-job);padding:16px 18px;
-  border:1px solid rgba(24,59,58,.10);box-shadow:var(--shadow-pastel);
-  transition:transform .15s,box-shadow .15s;
-}
-.pastel-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-hover);}
-.pastel-card.mint{background:var(--mint);}
-.pastel-card.butter{background:var(--butter);}
-.pastel-card.sky{background:var(--sky);}
-.pastel-card.lavender{background:var(--lavender);}
-.pastel-card.peach{background:var(--peach);}
-.pastel-card.rose{background:var(--rose);}
-.pastel-card .company{font-size:12px;font-weight:700;letter-spacing:.02em;color:var(--ink);}
-.pastel-card .title{font-size:15.5px;font-weight:650;color:var(--ink);margin-top:6px;}
-.pastel-card .tagline{font-size:12px;color:var(--text-2);margin-top:4px;}
-.pastel-card .divider{height:1px;background:rgba(24,59,58,.10);margin:14px 0 10px;}
-.pastel-card .foot{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--ink);}
-
-/* ---- AI suggestion cards: exactly three pastel meanings ---- */
-.suggest{border-radius:10px;border:none;padding:14px 16px;margin-bottom:10px;}
-.suggest.mint{background:var(--mint);}        /* AI rewrote your words */
-.suggest.butter{background:var(--butter);}    /* add a keyword or skill */
-.suggest.lavender{background:var(--lavender);} /* reorder, no new words */
-.suggest-head{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:7px;}
-.suggest-body{font-size:13.5px;color:var(--text);line-height:1.55;}
-.suggest-impact{text-align:right;font-size:12px;font-weight:600;color:var(--brand);margin-top:8px;}
-.suggest-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
-
-/* ---- Tables: hairlines, no zebra, no shadow ---- */
-table thead th{background:#FCFDFC;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);}
-table tbody tr{border-top:1px solid var(--border);}
-.row-swatch{width:8px;height:8px;border-radius:var(--r-sm);flex:none;display:inline-block;margin-right:8px;}
-
-/* ---- Dot grid: texture for absence, never behind real data ---- */
-.dot-grid{
-  background-image:radial-gradient(#B9C9C5 0.7px,transparent 0.7px);
-  background-size:16px 16px;
-  opacity:.18;
-}
-.empty-state{position:relative;}
 
 
 /* ============================================================
