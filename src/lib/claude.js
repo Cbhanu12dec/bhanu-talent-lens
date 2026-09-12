@@ -81,7 +81,7 @@ export async function ocrImages(images) {
 // AGENT PIPELINE — uses agentProxy (separate callable)
 // ============================================================
 
-async function agentProxy(task, payload) {
+export async function agentProxy(task, payload) {
   const res = await callAgentProxy({ task, payload });
   if (!res?.data) throw new Error(`No response from agentProxy for task "${task}".`);
   return res.data;

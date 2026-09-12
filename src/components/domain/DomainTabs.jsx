@@ -124,12 +124,12 @@ export function SubDomainsWorkspace({ domain, subDomains, loading, reload, onEdi
   const allChecked = rows.length > 0 && rows.every(r => selected.has(r.id));
 
   async function bulk(patch) {
-    await domainLibraryApi.bulkUpdateSubDomains([...selected], patch);
+    await domainLibraryApi.bulkUpdateSubDomains(domain.id, [...selected], patch);
     setSelected(new Set()); reload();
   }
   async function bulkDelete() {
     if (!confirm(`Delete ${selected.size} sub-domain${selected.size === 1 ? '' : 's'}? This also deletes their skills, bullet points, and instructions.`)) return;
-    await domainLibraryApi.deleteSubDomains([...selected]);
+    await domainLibraryApi.deleteSubDomains(domain.id, [...selected]);
     setSelected(new Set()); reload();
   }
 
@@ -209,11 +209,11 @@ export function SubDomainsWorkspace({ domain, subDomains, loading, reload, onEdi
                     {menuFor === s.id && (
                       <Menu onClose={() => setMenuFor(null)} items={[
                         { label: 'Edit', run: () => onEdit(s) },
-                        { label: s.status === 'published' ? 'Unpublish' : 'Publish', run: async () => { await domainLibraryApi.updateSubDomain(s.id, { status: s.status === 'published' ? 'draft' : 'published' }); reload(); } },
+                        { label: s.status === 'published' ? 'Unpublish' : 'Publish', run: async () => { await domainLibraryApi.updateSubDomain(domain.id, s.id, { status: s.status === 'published' ? 'draft' : 'published' }); reload(); } },
                         { label: 'Duplicate', run: async () => { await domainLibraryApi.createSubDomain({ domainId: domain.id, name: `${s.name} (copy)`, description: s.description }); reload(); } },
-                        { label: 'Archive', run: async () => { await domainLibraryApi.updateSubDomain(s.id, { status: 'archived' }); reload(); } },
+                        { label: 'Archive', run: async () => { await domainLibraryApi.updateSubDomain(domain.id, s.id, { status: 'archived' }); reload(); } },
                         { sep: true },
-                        { label: 'Delete', danger: true, run: async () => { await domainLibraryApi.deleteSubDomains([s.id]); reload(); } },
+                        { label: 'Delete', danger: true, run: async () => { await domainLibraryApi.deleteSubDomains(domain.id, [s.id]); reload(); } },
                       ]} />
                     )}
                   </td>
@@ -267,7 +267,7 @@ export function SkillsWorkspace({ domain, skills, subDomains, loading, reload, o
   });
 
   async function bulk(patch) {
-    await domainLibraryApi.bulkUpdateSkills([...selected], patch);
+    await domainLibraryApi.bulkUpdateSkills(domain.id, [...selected], patch);
     setSelected(new Set()); reload();
   }
 
@@ -298,7 +298,7 @@ export function SkillsWorkspace({ domain, skills, subDomains, loading, reload, o
         onPublish={() => bulk({ status: 'published' })}
         onUnpublish={() => bulk({ status: 'draft' })}
         onArchive={() => bulk({ status: 'archived' })}
-        onDelete={async () => { await domainLibraryApi.deleteSkills([...selected]); setSelected(new Set()); reload(); }}
+        onDelete={async () => { await domainLibraryApi.deleteSkills(domain.id, [...selected]); setSelected(new Set()); reload(); }}
       />
 
       {loading ? (
@@ -354,7 +354,7 @@ export function SkillsWorkspace({ domain, skills, subDomains, loading, reload, o
 }
 
 /* ===================== PHASE E — BULLET POINTS ===================== */
-export function BulletPointsWorkspace({ bullets, subDomains, loading, reload, onEdit, onCreate }) {
+export function BulletPointsWorkspace({ bullets, subDomains, loading, reload, onEdit, onCreate, domainId }) {
   const [q, setQ] = useState('');
   const [sub, setSub] = useState('all');
   const [priority, setPriority] = useState('all');
@@ -410,9 +410,9 @@ export function BulletPointsWorkspace({ bullets, subDomains, loading, reload, on
               {menuFor === b.id && (
                 <Menu onClose={() => setMenuFor(null)} items={[
                   { label: 'Edit', run: () => onEdit(b) },
-                  { label: b.status === 'published' ? 'Unpublish' : 'Publish', run: async () => { await domainLibraryApi.saveBulletPoint({ ...b, status: b.status === 'published' ? 'draft' : 'published' }); reload(); } },
+                  { label: b.status === 'published' ? 'Unpublish' : 'Publish', run: async () => { await domainLibraryApi.saveBulletPoint(domainId, { ...b, status: b.status === 'published' ? 'draft' : 'published' }); reload(); } },
                   { sep: true },
-                  { label: 'Delete', danger: true, run: async () => { await domainLibraryApi.deleteBulletPoint(b.id); reload(); } },
+                  { label: 'Delete', danger: true, run: async () => { await domainLibraryApi.deleteBulletPoint(domainId, b.id); reload(); } },
                 ]} />
               )}
             </div>
@@ -484,10 +484,10 @@ export function InstructionsWorkspace({ instructions, loading, reload, onEdit, o
               <StatusBadge status={ins.status} />
               <button className="dl-link" onClick={() => onEdit(ins)}>Edit</button>
               <button className="dl-link" onClick={async () => {
-                await domainLibraryApi.saveInstruction({ ...ins, status: ins.status === 'active' ? 'disabled' : 'active' });
+                await domainLibraryApi.saveInstruction(domainId, { ...ins, status: ins.status === 'active' ? 'disabled' : 'active' });
                 reload();
               }}>{ins.status === 'active' ? 'Disable' : 'Enable'}</button>
-              <button className="dl-link danger" onClick={async () => { await domainLibraryApi.deleteInstruction(ins.id); reload(); }}>Delete</button>
+              <button className="dl-link danger" onClick={async () => { await domainLibraryApi.deleteInstruction(domainId, ins.id); reload(); }}>Delete</button>
             </div>
           ))}
         </section>
@@ -517,14 +517,14 @@ export function PreviewUsageTab({ domain, subDomains, skills }) {
 
   return (
     <div className="dl-stack">
-      <div className="dl-note">Usage figures are simulated — the analytics pipeline isn't wired up yet.</div>
+      <div className="dl-note">Usage analytics aren't tracked yet, so these figures stay empty until the pipeline is wired up.</div>
       <section className="dl-card">
         <div className="dl-card-head"><h3>Usage</h3></div>
         <div className="dl-stats-inline">
-          <div><b>{usage ? usage.runs : <Skeleton w={40} />}</b><span>Used in runs</span></div>
-          <div><b>{usage ? usage.matchedJobs : <Skeleton w={40} />}</b><span>Matched jobs</span></div>
-          <div><b>{usage ? `${usage.avgMatch}%` : <Skeleton w={40} />}</b><span>Avg match</span></div>
-          <div><b>{usage ? fmt(usage.lastUsed) : <Skeleton w={60} />}</b><span>Last used</span></div>
+          <div><b>{usage ? (usage.runs ?? '—') : <Skeleton w={40} />}</b><span>Used in runs</span></div>
+          <div><b>{usage ? (usage.matchedJobs ?? '—') : <Skeleton w={40} />}</b><span>Matched jobs</span></div>
+          <div><b>{usage ? (usage.avgMatch == null ? '—' : `${usage.avgMatch}%`) : <Skeleton w={40} />}</b><span>Avg match</span></div>
+          <div><b>{usage ? (usage.lastUsed ? fmt(usage.lastUsed) : '—') : <Skeleton w={60} />}</b><span>Last used</span></div>
         </div>
       </section>
 

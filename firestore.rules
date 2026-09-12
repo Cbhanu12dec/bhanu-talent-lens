@@ -58,6 +58,16 @@ service cloud.firestore {
     match /domains/{domainId} {
       allow read: if request.auth != null;
       allow write: if false; // all writes go through agentProxy (Admin SDK)
+
+      // Domain Library sub-collections (subDomains / skills / bulletPoints /
+      // instructions). Admin-only authoring data — it is never read directly
+      // by the client, only through the admin-gated `domainLibrary` task, so
+      // the Admin SDK bypasses this and no client path is needed either way.
+      // Denied explicitly rather than by default so a later wildcard rule
+      // can't silently open them up.
+      match /{document=**} {
+        allow read, write: if false;
+      }
     }
   }
 }

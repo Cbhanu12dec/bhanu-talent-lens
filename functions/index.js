@@ -1483,5 +1483,281 @@ Weave each missing requirement into a real accomplishment bullet or the summary 
     throw new HttpsError('invalid-argument', `Unknown domainAdmin action: ${action}`);
   }
 
+  // ---- TASK: domainLibrary — full Domain Library CRUD (admin-only) ----
+  //
+  // Storage layout:
+  //   domains/{domainId}
+  //     ├─ subDomains/{id}
+  //     ├─ skills/{id}          (carries subDomainId, nullable)
+  //     ├─ bulletPoints/{id}    (carries subDomainId, nullable)
+  //     └─ instructions/{id}    (carries subDomainId, nullable)
+  //
+  // Sub-collections rather than top-level collections with a domainId field:
+  // scoping every query to a parent doc avoids composite indexes, and deleting
+  // a domain becomes a single recursive delete instead of five fan-out queries.
+  if (task === 'domainLibrary') {
+    requireAdmin(request);
+    const { action, payload: p = {} } = payload || {};
+    const audit = () => ({
+      updatedBy: request.auth.uid,
+      updatedByEmail: request.auth.token.email || null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    const domainsRef = db.collection('domains');
+    const sub = (domainId, name) => domainsRef.doc(domainId).collection(name);
+    const countOf = async ref => (await ref.count().get()).data().count;
+    const slugify = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    // Timestamps must reach the client as ISO strings — the UI sorts and
+    // formats with `new Date(...)`, which can't read a Firestore Timestamp.
+    const ser = d => {
+      const out = { id: d.id };
+      for (const [k, v] of Object.entries(d.data() || {})) {
+        out[k] = v && typeof v.toDate === 'function' ? v.toDate().toISOString() : v;
+      }
+      return out;
+    };
+    const listOf = async ref => (await ref.get()).docs.map(ser);
+
+    async function domainCounts(domainId) {
+      const [subDomains, skills, bulletPoints, instructions] = await Promise.all([
+        countOf(sub(domainId, 'subDomains')), countOf(sub(domainId, 'skills')),
+        countOf(sub(domainId, 'bulletPoints')), countOf(sub(domainId, 'instructions')),
+      ]);
+      return { subDomains, skills, bulletPoints, instructions };
+    }
+    async function subDomainCounts(domainId, subDomainId) {
+      const [skills, bulletPoints, instructions] = await Promise.all(
+        ['skills', 'bulletPoints', 'instructions'].map(c =>
+          countOf(sub(domainId, c).where('subDomainId', '==', subDomainId))),
+      );
+      return { skills, bulletPoints, instructions };
+    }
+    // Deletes every doc matching a query, in batches — used for cascades.
+    async function deleteWhere(ref) {
+      const snap = await ref.get();
+      if (snap.empty) return;
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const batch = db.batch();
+        snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+    }
+
+    switch (action) {
+      case 'stats': {
+        const [totalDomains, published, draft, totalSubDomains, totalSkills, totalBulletPoints] =
+          await Promise.all([
+            countOf(domainsRef),
+            countOf(domainsRef.where('status', '==', 'published')),
+            countOf(domainsRef.where('status', '==', 'draft')),
+            countOf(db.collectionGroup('subDomains')),
+            countOf(db.collectionGroup('skills')),
+            countOf(db.collectionGroup('bulletPoints')),
+          ]);
+        return {
+          totalDomains, totalSubDomains, totalSkills, totalBulletPoints,
+          publishedCount: published, draftCount: draft,
+        };
+      }
+
+      case 'listDomains': {
+        const snap = await domainsRef.get();
+        return {
+          domains: await Promise.all(snap.docs.map(async d => ({
+            ...ser(d), counts: await domainCounts(d.id),
+          }))),
+        };
+      }
+
+      case 'createDomain': {
+        const ref = domainsRef.doc();
+        await ref.set({
+          name: p.name,
+          slug: slugify(p.name),
+          description: p.description || '',
+          // `summary` and `categories` mirror the legacy shape so domains made
+          // here stay readable by AgentView and the existing Admin tab.
+          summary: p.description || '',
+          categories: [],
+          icon: p.icon || '📁',
+          status: p.status || 'draft',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdBy: request.auth.uid,
+          createdByEmail: request.auth.token.email || null,
+          ...audit(),
+        });
+        const doc = await ref.get();
+        return { domain: { ...ser(doc), counts: await domainCounts(ref.id) } };
+      }
+
+      case 'updateDomain': {
+        const patch = { ...p.patch, ...audit() };
+        if (patch.name) patch.slug = slugify(patch.name);
+        if (typeof patch.description === 'string') patch.summary = patch.description;
+        await domainsRef.doc(p.id).set(patch, { merge: true });
+        const doc = await domainsRef.doc(p.id).get();
+        return { domain: { ...ser(doc), counts: await domainCounts(p.id) } };
+      }
+
+      case 'deleteDomain': {
+        await db.recursiveDelete(domainsRef.doc(p.id));
+        return { ok: true };
+      }
+
+      case 'listSubDomains': {
+        const docs = await listOf(sub(p.domainId, 'subDomains'));
+        const withCounts = await Promise.all(docs.map(async s => ({
+          ...s, counts: await subDomainCounts(p.domainId, s.id),
+        })));
+        return { subDomains: withCounts.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) };
+      }
+
+      case 'createSubDomain': {
+        const col = sub(p.domainId, 'subDomains');
+        const ref = col.doc();
+        await ref.set({
+          domainId: p.domainId,
+          name: p.name,
+          description: p.description || '',
+          status: p.status || 'draft',
+          sortOrder: (await countOf(col)) + 1,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...audit(),
+        });
+        const doc = await ref.get();
+        return { subDomain: { ...ser(doc), counts: { skills: 0, bulletPoints: 0, instructions: 0 } } };
+      }
+
+      case 'updateSubDomain': {
+        const ref = sub(p.domainId, 'subDomains').doc(p.id);
+        await ref.set({ ...p.patch, ...audit() }, { merge: true });
+        const doc = await ref.get();
+        return { subDomain: { ...ser(doc), counts: await subDomainCounts(p.domainId, p.id) } };
+      }
+
+      case 'deleteSubDomains': {
+        for (const id of p.ids) {
+          await Promise.all(['skills', 'bulletPoints', 'instructions'].map(c =>
+            deleteWhere(sub(p.domainId, c).where('subDomainId', '==', id))));
+          await sub(p.domainId, 'subDomains').doc(id).delete();
+        }
+        return { ok: true };
+      }
+
+      case 'bulkUpdateSubDomains': {
+        const batch = db.batch();
+        const a = audit();
+        p.ids.forEach(id => batch.set(sub(p.domainId, 'subDomains').doc(id), { ...p.patch, ...a }, { merge: true }));
+        await batch.commit();
+        return { ok: true };
+      }
+
+      case 'listSkills':
+        return { skills: await listOf(sub(p.domainId, 'skills')) };
+
+      case 'addSkills': {
+        const col = sub(p.domainId, 'skills');
+        const batch = db.batch();
+        const a = audit();
+        const created = p.names.map(name => {
+          const ref = col.doc();
+          const row = {
+            domainId: p.domainId,
+            subDomainId: p.meta?.subDomainId || null,
+            name,
+            category: p.meta?.category || 'Primary Skills',
+            priority: p.meta?.priority || 'medium',
+            evidenceWeight: p.meta?.evidenceWeight || 'moderate',
+            status: p.meta?.status || 'draft',
+            usageScore: 0,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...a,
+          };
+          batch.set(ref, row);
+          return { id: ref.id, ...row, createdAt: null, updatedAt: null };
+        });
+        await batch.commit();
+        return { skills: created };
+      }
+
+      case 'updateSkill': {
+        const ref = sub(p.domainId, 'skills').doc(p.id);
+        await ref.set({ ...p.patch, ...audit() }, { merge: true });
+        return { skill: ser(await ref.get()) };
+      }
+
+      case 'bulkUpdateSkills': {
+        const batch = db.batch();
+        const a = audit();
+        p.ids.forEach(id => batch.set(sub(p.domainId, 'skills').doc(id), { ...p.patch, ...a }, { merge: true }));
+        await batch.commit();
+        return { ok: true };
+      }
+
+      case 'deleteSkills': {
+        const batch = db.batch();
+        p.ids.forEach(id => batch.delete(sub(p.domainId, 'skills').doc(id)));
+        await batch.commit();
+        return { ok: true };
+      }
+
+      case 'listBulletPoints':
+        return { bulletPoints: await listOf(sub(p.domainId, 'bulletPoints')) };
+
+      case 'saveBulletPoint': {
+        const col = sub(p.domainId, 'bulletPoints');
+        const { id, ...rest } = p.bulletPoint;
+        const ref = id ? col.doc(id) : col.doc();
+        const base = id ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() };
+        await ref.set({ ...rest, domainId: p.domainId, ...base, ...audit() }, { merge: true });
+        return { bulletPoint: ser(await ref.get()) };
+      }
+
+      case 'deleteBulletPoint': {
+        await sub(p.domainId, 'bulletPoints').doc(p.id).delete();
+        return { ok: true };
+      }
+
+      case 'listInstructions': {
+        const docs = await listOf(sub(p.domainId, 'instructions'));
+        return { instructions: docs.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) };
+      }
+
+      case 'saveInstruction': {
+        const col = sub(p.domainId, 'instructions');
+        const { id, ...rest } = p.instruction;
+        const ref = id ? col.doc(id) : col.doc();
+        const base = id ? {} : {
+          sortOrder: (await countOf(col)) + 1,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        await ref.set({ ...rest, domainId: p.domainId, ...base, ...audit() }, { merge: true });
+        return { instruction: ser(await ref.get()) };
+      }
+
+      case 'reorderInstructions': {
+        const batch = db.batch();
+        p.orderedIds.forEach((id, i) =>
+          batch.set(sub(p.domainId, 'instructions').doc(id), { sortOrder: i + 1 }, { merge: true }));
+        await batch.commit();
+        return { ok: true };
+      }
+
+      case 'deleteInstruction': {
+        await sub(p.domainId, 'instructions').doc(p.id).delete();
+        return { ok: true };
+      }
+
+      // No analytics pipeline exists yet. Report that honestly rather than
+      // returning invented figures the UI would render as real.
+      case 'usage':
+        return { available: false, runs: null, matchedJobs: null, avgMatch: null, lastUsed: null };
+
+      default:
+        throw new HttpsError('invalid-argument', `Unknown domainLibrary action: ${action}`);
+    }
+  }
+
   throw new HttpsError('invalid-argument', `Unknown agent task: ${task}`);
 });

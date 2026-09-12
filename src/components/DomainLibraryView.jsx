@@ -288,6 +288,7 @@ export default function DomainLibraryView({ notify }) {
                   )}
                   {activeTab === 'bullets' && (
                     <BulletPointsWorkspace bullets={bullets} subDomains={subDomains} loading={loadingContent}
+                      domainId={domain.id}
                       reload={refreshAll} onEdit={b => setBulletDrawer({ open: true, bullet: b })}
                       onCreate={() => setBulletDrawer({ open: true, bullet: null })} />
                   )}
@@ -364,7 +365,7 @@ export default function DomainLibraryView({ notify }) {
       <SubDomainDrawer open={subDrawer.open} onClose={() => setSubDrawer({ open: false, subDomain: null })}
         domain={domain} subDomain={subDrawer.subDomain}
         onSave={async data => {
-          if (subDrawer.subDomain) await domainLibraryApi.updateSubDomain(subDrawer.subDomain.id, data);
+          if (subDrawer.subDomain) await domainLibraryApi.updateSubDomain(domain.id, subDrawer.subDomain.id, data);
           else await domainLibraryApi.createSubDomain({ domainId: domain.id, ...data });
           setSubDrawer({ open: false, subDomain: null }); refreshAll();
         }} />
@@ -379,14 +380,14 @@ export default function DomainLibraryView({ notify }) {
       <BulletPointDrawer open={bulletDrawer.open} onClose={() => setBulletDrawer({ open: false, bullet: null })}
         bullet={bulletDrawer.bullet} subDomains={subDomains}
         onSave={async data => {
-          await domainLibraryApi.saveBulletPoint({ ...data, domainId: domain.id, subDomainId: data.subDomainId || null });
+          await domainLibraryApi.saveBulletPoint(domain.id, { ...data, subDomainId: data.subDomainId || null });
           setBulletDrawer({ open: false, bullet: null }); refreshAll();
         }} />
 
       <InstructionDrawer open={instrDrawer.open} onClose={() => setInstrDrawer({ open: false, instruction: null })}
         instruction={instrDrawer.instruction} domain={domain} subDomains={subDomains}
         onSave={async data => {
-          await domainLibraryApi.saveInstruction({ ...data, domainId: domain.id, subDomainId: data.subDomainId || null });
+          await domainLibraryApi.saveInstruction(domain.id, { ...data, subDomainId: data.subDomainId || null });
           setInstrDrawer({ open: false, instruction: null }); refreshAll();
         }} />
     </section>
