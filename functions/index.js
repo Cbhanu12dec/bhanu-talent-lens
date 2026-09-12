@@ -244,6 +244,75 @@ function atsRepairInstruction(audit) {
   return issues.length ? issues.map((s, i) => `${i + 1}. ${s}`).join('\n') : '';
 }
 
+// JD requirements arrive as phrases ("Experience with distributed systems at
+// scale"), so a verbatim substring test almost never fires. Match on the
+// phrase's significant terms instead and grade by how many are present.
+const REQ_STOPWORDS = new Set([
+  'experience','with','and','or','the','a','an','of','in','on','for','to','at','as','by','from',
+  'strong','solid','proven','excellent','good','great','deep','hands','years','year','plus',
+  'ability','skills','skill','knowledge','understanding','working','proficiency','proficient',
+  'familiarity','familiar','demonstrated','track','record','using','use','including','such',
+  'must','have','should','be','is','are','you','your','we','our','this','that','role','work',
+  'related','similar','equivalent','preferred','required','nice','bonus','etc','across','within',
+]);
+
+// Light stemming so "leading engineering teams" matches "engineers ... team" —
+// real ATS parsers normalise this way, and exact-form matching understates
+// coverage badly. Rules are deliberately conservative and applied in order so
+// related forms land on the same stem.
+function stemToken(t) {
+  if (t.length <= 4) return t;
+  if (/ies$/.test(t)) return t.slice(0, -3) + 'y';
+  if (/ing$/.test(t) && t.length > 6) return t.slice(0, -3);
+  if (/ed$/.test(t) && t.length > 5) return t.slice(0, -2);
+  if (/[^s]s$/.test(t)) return t.slice(0, -1);
+  return t;
+}
+
+// "." and "/" are kept inside tokens so ".NET" and "CI/CD" survive, but a
+// trailing one is just sentence punctuation and would break stem matching.
+function tokenize(s) {
+  return String(s || '').toLowerCase()
+    .split(/[^a-z0-9+#./-]+/)
+    .map(t => t.replace(/^[./-]+|[./-]+$/g, ''))
+    .filter(Boolean);
+}
+
+function requirementTerms(name) {
+  const raw = String(name || '').toLowerCase();
+  const terms = tokenize(raw).filter(t => {
+    if (t.length < 2 || /^\d+$/.test(t)) return false;
+    if (REQ_STOPWORDS.has(t)) return false;
+    // "hands-on" survives the plain stopword test but carries no meaning.
+    if (t.includes('-') && t.split('-').every(p => !p || REQ_STOPWORDS.has(p))) return false;
+    return true;
+  });
+  return { terms: [...new Set(terms)], phrase: raw.trim() };
+}
+
+function matchRequirement(name, text) {
+  const { terms, phrase } = requirementTerms(name);
+  if (!terms.length) return { strength: 'MISSING', mentions: 0, terms: [] };
+
+  const escaped = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (phrase.length > 3 && text.includes(phrase)) {
+    const mentions = (text.match(new RegExp(escaped(phrase), 'g')) || []).length;
+    return { strength: 'STRONG', mentions, terms };
+  }
+
+  const textStems = new Set(tokenize(text).map(stemToken));
+  let hits = 0, mentions = 0;
+  for (const t of terms) {
+    const re = new RegExp(`(^|[^a-z0-9])${escaped(t)}([^a-z0-9]|$)`, 'g');
+    const found = (text.match(re) || []).length;
+    if (found) { hits++; mentions += found; }
+    else if (textStems.has(stemToken(t))) { hits++; mentions += 1; }
+  }
+  const coverage = hits / terms.length;
+  const strength = coverage >= 0.65 ? 'STRONG' : coverage >= 0.34 ? 'WEAK' : 'MISSING';
+  return { strength, mentions, terms };
+}
+
 // Shared ATS ruleset injected into every resume-generating prompt.
 const ATS_RULES = `ATS COMPLIANCE - non-negotiable structural rules
 - Use standard, recognizable section headings only: PROFESSIONAL SUMMARY, TECHNICAL SKILLS, PROFESSIONAL EXPERIENCE, EDUCATION, CERTIFICATIONS. Never invent creative heading names.
@@ -1173,6 +1242,8 @@ JOB TITLE: ${jobDescription.title || ''}`;
     };
 
     const criticalReqs = (jobDescription.requirements || []).filter(r => ['Critical', 'High'].includes(r.importance)).map(r => r.name).join(', ');
+    const allReqTerms = [...new Set((jobDescription.requirements || [])
+      .flatMap(r => requirementTerms(r.name).terms))].slice(0, 45);
     const styleNote = styleDirectives.slice(0, 4).join('; ');
     const priorityEmployers = (strategy.experiencePriority || []).filter(e => e.level === 'Very High' || e.level === 'High').map(e => e.employer).join(', ');
 
@@ -1194,6 +1265,13 @@ Never use em dashes or en dashes anywhere in the output. Use commas, colons, or 
 
 IDENTITY - use the ground truth verbatim
 The "personal" block in the ground truth holds the candidate's real name and contact details. Copy "fullName" into "name" exactly as written. Build "contact" from the phone, email, linkedin, github, portfolio and location that are present, pipe-separated, in that order. Never invent, abbreviate, or omit a contact field that was provided, and never substitute a placeholder like "Candidate Name" or "email@example.com".
+
+KEYWORD COVERAGE - hard requirement, not a stylistic suggestion
+The user message lists KEYWORDS TO COVER drawn from this JD. Every one of them that the ground truth truthfully supports must appear in the resume using the JD's own wording, at least once. Placement priority: Professional Summary and the most recent role first, then Technical Skills, then earlier roles. Work them in as part of real accomplishments, never as a keyword list bolted onto the end. Omit only the ones the candidate genuinely has no evidence for, and do not stretch a claim to fit a keyword.
+
+BEFORE RETURNING - internal audit, do not print this reasoning
+1. Walk the KEYWORDS TO COVER list and confirm each supported one appears in your draft's exact wording; add any that are missing.
+2. Walk the ATS COMPLIANCE list and fix every violation: weak bullet openers, pronouns, unexpanded acronyms, inconsistent dates, banned filler, and bullets with no number where the ground truth supports one.
 
 REVISION MODE
 If the user message includes an EXISTING DRAFT, you are editing that draft, not authoring a new resume. Preserve its structure, section order, and wording exactly except where an instruction requires a change. Change the minimum needed to satisfy the instructions, then re-check the whole document against the ATS rules below. If no EXISTING DRAFT is provided, build the resume from the ground truth as described above.
@@ -1219,6 +1297,7 @@ ${JSON.stringify(groundTruth, null, 2)}
 TARGET ROLE: ${jobDescription.title || 'Target Role'}
 COMPANY: ${jobDescription.company || ''}
 CRITICAL REQUIREMENTS: ${criticalReqs}
+KEYWORDS TO COVER (use each one's exact wording at least once wherever the ground truth truthfully supports it): ${allReqTerms.join(', ')}
 PRIORITY EMPLOYERS TO LEAD WITH: ${priorityEmployers || 'all'}
 POSITIONING: ${strategy.positioning || ''}
 SKILLS TO HIGHLIGHT: ${(strategy.skillPriority || []).slice(0, 8).join(', ')}
@@ -1238,16 +1317,25 @@ Apply the POSITIONING instructions above to the draft as targeted edits. Keep ev
     }
 
     function scoreAgainstRequirements(resume) {
-      const contentText = JSON.stringify(resume).toLowerCase();
+      const text = resumeToPlainText(resume).toLowerCase();
       const matches = (jobDescription.requirements || []).map(req => {
-        const needle = req.name.toLowerCase();
-        const mentions = (contentText.match(new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-        return { name: req.name, importance: req.importance, mentionCount: req.mentionCount, evidenceStrength: mentions >= 2 ? 'STRONG' : mentions === 1 ? 'WEAK' : 'MISSING', mentions };
+        const { strength, mentions, terms } = matchRequirement(req.name, text);
+        return {
+          name: req.name, importance: req.importance, mentionCount: req.mentionCount,
+          evidenceStrength: strength, mentions, terms,
+        };
       });
-      const strong = matches.filter(m => m.evidenceStrength === 'STRONG').length;
-      const weak = matches.filter(m => m.evidenceStrength === 'WEAK').length;
-      const total = matches.length || 1;
-      return { matches, score: Math.round(((strong + weak * 0.5) / total) * 100) };
+      // Critical/High requirements carry more weight than nice-to-haves, so a
+      // resume isn't punished equally for missing an optional bonus skill.
+      const weightOf = imp => (imp === 'Critical' ? 3 : imp === 'High' ? 2 : 1);
+      const creditOf = s => (s === 'STRONG' ? 1 : s === 'WEAK' ? 0.55 : 0);
+      let earned = 0, possible = 0;
+      for (const m of matches) {
+        const w = weightOf(m.importance);
+        possible += w;
+        earned += w * creditOf(m.evidenceStrength);
+      }
+      return { matches, score: possible ? Math.round((earned / possible) * 100) : 0 };
     }
 
     let content = await runAgentBuildPass(userPrompt, 'agentBuild');
@@ -1263,38 +1351,45 @@ Apply the POSITIONING instructions above to the draft as targeted edits. Keep ev
 
     let { matches: requirementMatches, score: matchScore } = scoreAgainstRequirements(content);
 
-    // Same measured-then-repair loop the tailor path uses: the first draft is
-    // audited against the JD's own requirement list plus the ATS hygiene
-    // rules, and only re-run when something concrete is actually wrong.
-    const criticalMissing = requirementMatches
-      .filter(m => m.evidenceStrength === 'MISSING' && ['Critical', 'High'].includes(m.importance))
-      .map(m => m.name);
-    let buildAudit = auditAts(content, requirementMatches.filter(m => m.evidenceStrength !== 'MISSING').map(m => m.name));
-    buildAudit = { ...buildAudit, missingKeywords: criticalMissing };
-    const buildRepair = atsRepairInstruction(buildAudit);
+    // Measured-then-repair, run up to twice: build-from-scratch has no source
+    // resume to fall back on, so it needs more than one shot to converge.
+    let buildAudit = auditAts(content, []);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const missing = requirementMatches
+        .filter(m => m.evidenceStrength !== 'STRONG')
+        .sort((a, b) => (b.importance === 'Critical') - (a.importance === 'Critical'))
+        .map(m => `${m.name}${m.evidenceStrength === 'WEAK' ? ' (only partially covered)' : ''}`);
 
-    if (buildRepair && (matchScore < 85 || criticalMissing.length)) {
+      buildAudit = { ...auditAts(content, []), missingKeywords: missing.slice(0, 14) };
+      const repairList = atsRepairInstruction(buildAudit);
+      const needsWork = matchScore < 92 || Boolean(repairList);
+      if (!needsWork || !repairList) break;
+
       try {
         const repaired = await runAgentBuildPass(`${userPrompt}
 
-Your previous draft was audited mechanically against the resume text you produced. It scored ${matchScore}/100 on JD requirement coverage. Produce a corrected version that fixes every item below while keeping everything already working:
-${buildRepair}
+Your previous draft was audited mechanically against the resume text you produced. It scored ${matchScore}/100 on JD requirement coverage, against a 92 target. Produce a corrected version that fixes every item below while keeping everything that already works:
+${repairList}
 
-Never invent employers, dates, credentials, or metrics that are not in the ground truth.`, 'agentBuild_repair');
+Weave each missing requirement into a real accomplishment bullet or the summary using the JD's own wording. Never invent employers, dates, credentials, or metrics that are not in the ground truth — if a requirement genuinely has no supporting evidence, leave it out rather than fabricating one.`, `agentBuild_repair_${attempt + 1}`);
         const rescored = scoreAgainstRequirements(repaired);
         if (rescored.score > matchScore) {
           content = applyIdentity(repaired);
           requirementMatches = rescored.matches;
           matchScore = rescored.score;
+        } else {
+          break;
         }
       } catch (e) {
-        console.error('agentBuild repair pass failed, keeping first draft:', e.message);
+        console.error('agentBuild repair pass failed, keeping current draft:', e.message);
+        break;
       }
     }
 
     console.log(JSON.stringify({
       tag: 'agent_build_audit', uid, matchScore,
-      criticalMissing: criticalMissing.length,
+      missing: requirementMatches.filter(m => m.evidenceStrength === 'MISSING').length,
+      weak: requirementMatches.filter(m => m.evidenceStrength === 'WEAK').length,
       quantifiedBullets: buildAudit.quantifiedBullets, totalBullets: buildAudit.totalBullets,
       weakOpeners: buildAudit.weakOpenerBullets.length, pronouns: buildAudit.pronounBullets.length,
     }));
