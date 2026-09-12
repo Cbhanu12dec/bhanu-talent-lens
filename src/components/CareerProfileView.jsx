@@ -7,6 +7,63 @@ import {
 
 const PROFILE_NAME_IDEAS = ['Full Stack roles', 'Program Manager roles', 'Data / ML roles', 'Early-career roles'];
 
+function scrollTo(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Each todo opens the matching editor, so no item is ever dead text (§4).
+const CHECKLIST = [
+  {
+    id: 'exp', label: 'Add your work experience',
+    isDone: p => (p?.experience?.length || 0) > 0,
+    go: ({ setAddExpOpen }) => { setAddExpOpen(true); scrollTo('cp-experience'); },
+  },
+  {
+    id: 'exp2', label: 'Add a second role for stronger context',
+    isDone: p => (p?.experience?.length || 0) > 1,
+    go: ({ setAddExpOpen }) => { setAddExpOpen(true); scrollTo('cp-experience'); },
+  },
+  {
+    id: 'edu', label: 'Add your education',
+    isDone: p => (p?.education?.length || 0) > 0,
+    go: ({ setAddEduOpen }) => { setAddEduOpen(true); scrollTo('cp-education'); },
+  },
+  {
+    id: 'skills', label: 'List at least 3 skills',
+    isDone: p => (p?.skills?.length || 0) >= 3,
+    go: ({ focusSkills }) => focusSkills(),
+  },
+];
+
+// Skills are stored as flat labels, so the group is inferred rather than
+// migrated — §4 still requires they never render as an unsorted dump.
+const SKILL_GROUPS = [
+  ['Languages', /^(javascript|typescript|python|java|c\+\+|c#|go|golang|ruby|php|rust|kotlin|swift|scala|sql|r|bash|shell)$/i],
+  ['Frontend', /(react|vue|angular|svelte|next\.?js|redux|tailwind|css|html|sass|webpack|vite)/i],
+  ['Backend', /(node|express|django|flask|spring|rails|\.net|graphql|rest|api|microservice|kafka|rabbitmq)/i],
+  ['Cloud & DevOps', /(aws|azure|gcp|google cloud|kubernetes|k8s|docker|terraform|jenkins|ci\/cd|ansible|helm|cloudformation|devops)/i],
+  ['Data', /(postgres|mysql|mongo|redis|dynamo|snowflake|spark|hadoop|airflow|etl|bigquery|elasticsearch|databricks)/i],
+  ['AI & ML', /(machine learning|ml|tensorflow|pytorch|llm|nlp|generative|openai|langchain|data science)/i],
+  ['Delivery & Leadership', /(agile|scrum|jira|confluence|roadmap|stakeholder|program management|project management|leadership|mentoring)/i],
+];
+
+function groupSkills(skills) {
+  const groups = new Map();
+  const other = [];
+  for (const s of skills || []) {
+    const match = SKILL_GROUPS.find(([, re]) => re.test(s.label));
+    if (match) {
+      if (!groups.has(match[0])) groups.set(match[0], []);
+      groups.get(match[0]).push(s);
+    } else {
+      other.push(s);
+    }
+  }
+  const out = SKILL_GROUPS.map(([name]) => [name, groups.get(name)]).filter(([, v]) => v?.length);
+  if (other.length) out.push(['Other', other]);
+  return out;
+}
+
 export default function CareerProfileView({ uid, notify }) {
   const [profiles, setProfiles] = useState([]);
   const [activeId, setActiveId] = useState('main');
@@ -25,6 +82,12 @@ export default function CareerProfileView({ uid, notify }) {
 
   const [expForm, setExpForm] = useState({ title: '', company: '', location: '', startDate: '', endDate: '' });
   const [eduForm, setEduForm] = useState({ school: '', degree: '', fieldOfStudy: '', startDate: '', endDate: '' });
+  const skillInputRef = React.useRef(null);
+
+  function focusSkills() {
+    scrollTo('cp-skills');
+    setTimeout(() => skillInputRef.current?.focus(), 320);
+  }
 
   useEffect(() => { load(); }, [uid]);
 
@@ -207,27 +270,41 @@ export default function CareerProfileView({ uid, notify }) {
         )}
       </div>
 
-      {/* Completeness bar */}
-      <div className="card" style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Profile completeness</span>
-            <span style={{ fontWeight: 650, color: completeness >= 80 ? 'var(--success)' : 'var(--primary)' }}>{completeness}%</span>
+      {/* §4 Completeness — every todo is a real click target, never static text */}
+      <div className="card" style={{ marginBottom: 18, padding: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+          <div className="completeness-pct">{completeness}%</div>
+          <div>
+            <span className={`badge badge-${completeness >= 80 ? 'success' : completeness >= 50 ? 'warning' : 'danger'}`}>
+              {completeness >= 80 ? 'Excellent' : completeness >= 50 ? 'Getting there' : 'Needs work'}
+            </span>
+            <div style={{ fontSize: 12, color: 'var(--ink-2)', marginTop: 4 }}>Profile completeness</div>
           </div>
-          <div className="progress-bar"><div className={`progress-fill${completeness >= 80 ? ' green' : ''}`} style={{ width: `${completeness}%` }} /></div>
         </div>
-        {completeness < 100 && (
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', maxWidth: 220 }}>
-            {!profile.experience?.length && 'Add experience. '}
-            {!profile.education?.length && 'Add education. '}
-            {(profile.skills?.length || 0) < 3 && 'Add 3+ skills.'}
-          </div>
-        )}
+        <div className="progress-bar" style={{ height: 8 }}>
+          <div className="progress-fill" style={{ width: `${completeness}%`, height: '100%' }} />
+        </div>
+
+        <div className="check-list">
+          {CHECKLIST.map(item => {
+            const done = item.isDone(profile);
+            return (
+              <button key={item.id}
+                className={`check-item ${done ? 'done' : 'todo'}`}
+                disabled={done}
+                onClick={() => !done && item.go({ setAddExpOpen, setAddEduOpen, focusSkills })}>
+                <span className="check-mark">{done ? '✓' : '○'}</span>
+                <span>{item.label}</span>
+                {!done && <span className="check-arrow">→</span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.3fr .7fr', gap: 18, alignItems: 'start' }}>
         {/* Experience */}
-        <div className="panel">
+        <div className="panel" id="cp-experience">
           <div className="panel-head">
             <h2>Experience</h2>
             <button className="btn btn-sm btn-primary" onClick={() => { setEditingExp(null); setExpForm({ title: '', company: '', location: '', startDate: '', endDate: '' }); setAddExpOpen(v => !v); }}>
@@ -282,7 +359,7 @@ export default function CareerProfileView({ uid, notify }) {
 
         {/* Education + Skills */}
         <div>
-          <div className="panel" style={{ marginBottom: 14 }}>
+          <div className="panel" id="cp-education" style={{ marginBottom: 14 }}>
             <div className="panel-head">
               <h2>Education</h2>
               <button className="btn btn-sm btn-primary" onClick={() => setAddEduOpen(v => !v)}>{addEduOpen ? '✕' : '+ Add'}</button>
@@ -321,19 +398,25 @@ export default function CareerProfileView({ uid, notify }) {
             )}
           </div>
 
-          <div className="panel">
+          <div className="panel" id="cp-skills">
             <div className="panel-head"><h2>Skills</h2><span className="count">{profile.skills?.length || 0}</span></div>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              <input type="text" value={skillInput} onChange={e => setSkillInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && skillInput.trim() && handleAddSkill()} placeholder="Add a skill…" style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              <input ref={skillInputRef} type="text" value={skillInput} onChange={e => setSkillInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && skillInput.trim() && handleAddSkill()} placeholder="Add a skill…" style={{ flex: 1 }} />
               <button className="btn btn-sm btn-primary" onClick={handleAddSkill}>+ Add</button>
             </div>
-            <div className="chips">
-              {(profile.skills || []).map(s => (
-                <div key={s.id} className="chip editable" onClick={() => handleDeleteSkill(s.id)} title="Click to remove">
-                  {s.label} <span className="x">✕</span>
+            {/* Grouped by category — never a flat unsorted dump (§6). */}
+            {groupSkills(profile.skills).map(([group, items]) => (
+              <div className="skill-group" key={group}>
+                <div className="skill-group-label">{group}</div>
+                <div className="chips">
+                  {items.map(s => (
+                    <div key={s.id} className="chip editable" onClick={() => handleDeleteSkill(s.id)} title="Click to remove">
+                      {s.label} <span className="x">✕</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
             {!(profile.skills?.length) && (
               <div className="empty-state" style={{ padding: '18px 0' }}>
                 <div className="empty-state-icon">◈</div>

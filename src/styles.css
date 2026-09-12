@@ -19,7 +19,7 @@
   /* basic (background/font) color */
   --navy:#193B68;
   --navy-soft:rgba(25,59,104,.08);
-  --navy-shadow:rgba(25,59,104,.18);
+  --navy-shadow:rgba(25,59,104,.16);
 
   /* accents — same hue family, variety without leaving blue */
   --a-sky:#14D2FF;  --a-sky-soft:rgba(20,210,255,.12);  --a-sky-shadow:rgba(20,210,255,.30);
@@ -31,11 +31,11 @@
   --border:#E7EDFA;
 
   /* Semantic states still need full triplets (§1). */
-  --ok:#11B981;     --ok-soft:rgba(17,185,129,.12);   --ok-shadow:rgba(17,185,129,.28);
-  --bad:#F0526D;    --bad-soft:rgba(240,82,109,.12);  --bad-shadow:rgba(240,82,109,.28);
-  --warn:#E8A33D;   --warn-soft:rgba(232,163,61,.14); --warn-shadow:rgba(232,163,61,.28);
+  --ok:#1E9E62;     --ok-soft:rgba(30,158,98,.10);    --ok-shadow:rgba(30,158,98,.28);
+  --bad:#D85656;    --bad-soft:rgba(216,86,86,.10);   --bad-shadow:rgba(216,86,86,.28);
+  --warn:#C98A16;   --warn-soft:rgba(201,138,22,.10); --warn-shadow:rgba(201,138,22,.28);
 
-  --r-sm:12px; --r-btn:999px; --r-input:14px; --r-card:20px; --r-bigcard:22px; --r-pill:999px;
+  --r-sm:10px; --r-btn:10px; --r-input:10px; --r-card:18px; --r-bigcard:18px; --r-pill:999px;
   --shadow-card:0 14px 34px var(--navy-shadow);
   --shadow-brand:0 10px 22px var(--brand-shadow);
 
@@ -1262,14 +1262,14 @@ h1.page-title{font-size:24px;font-weight:700;color:var(--navy);letter-spacing:-.
 }
 .doc,.paper{background:var(--card);border:none;box-shadow:var(--shadow-card);}
 
-/* ---- §2 Primary action: brand fill always carries a brand-hued shadow ---- */
-.btn{border-radius:var(--r-btn);height:40px;font-weight:600;border:none;font-family:var(--sans);}
-.btn-primary,.cta-btn{background:var(--brand);color:#fff;box-shadow:var(--shadow-brand);}
+/* ---- §2 Buttons: 10px radius. Pills are for badges only, not buttons. ---- */
+.btn{border-radius:var(--r-btn);height:40px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--navy);font-family:var(--sans);}
+.btn-primary,.cta-btn{background:var(--brand);color:#fff;border:none;box-shadow:var(--shadow-brand);}
 .btn-primary:hover,.cta-btn:hover{background:var(--brand-hover);box-shadow:0 12px 26px var(--brand-shadow);}
 .btn-primary:disabled{box-shadow:none;}
 .btn-secondary,.btn-ghost{background:var(--card);color:var(--navy);border:1px solid var(--border);box-shadow:none;}
 .btn-ghost:hover,.btn-secondary:hover{background:var(--sunken);}
-.btn-danger,.btn-danger-ghost{background:transparent;color:var(--bad);box-shadow:none;}
+.btn-danger,.btn-danger-ghost{background:transparent;color:var(--bad);box-shadow:none;border-color:transparent;}
 .btn-danger:hover{background:var(--bad-soft);}
 .btn-sm{height:34px;}
 .btn-xs{height:28px;}
@@ -1398,3 +1398,182 @@ table tbody tr{border-top:1px solid var(--border);}
 .build-cat .cat-body,.build-cat .cat-head{fill:var(--brand);}
 .build-cat .cat-tail{stroke:var(--brand);}
 .build-cat .cat-paw,.build-cat .cat-sparks circle{fill:var(--a-sky);}
+
+/* ============================================================
+   BUILD SPEC — Dashboard / Career Profile / Resume Library
+   ============================================================ */
+
+/* ---- §2 Overlays: white, no border, navy-tinted shadow ---- */
+.modal-overlay{background:rgba(25,59,104,.30);backdrop-filter:blur(2px);}
+.modal-card{
+  background:var(--card);border:none;border-radius:20px;
+  box-shadow:0 30px 70px var(--navy-shadow);padding:24px;
+}
+.modal-head h2{font-family:var(--display);font-size:17px;font-weight:700;color:var(--navy);}
+.modal-close{background:none;border:none;color:var(--ink-3);font-size:15px;cursor:pointer;}
+.modal-close:hover{color:var(--navy);}
+.card-overflow-menu,.cmdk,.cmdk-card,.profile-switcher-menu{
+  background:var(--card);border:none;border-radius:14px;
+  box-shadow:0 16px 40px var(--navy-shadow);
+}
+.card-overflow-item{color:var(--navy);font-size:13px;}
+.card-overflow-item:hover{background:var(--brand-soft);color:var(--brand);}
+.card-overflow-item.danger{color:var(--bad);}
+.card-overflow-item.danger:hover{background:var(--bad-soft);color:var(--bad);}
+.card-overflow-sep{height:1px;background:var(--border);margin:5px 8px;}
+
+/* ---- §3/§5 Shared empty state ---- */
+.es-card{
+  background:var(--card);border-radius:var(--r-card);box-shadow:var(--shadow-card);
+  padding:44px 32px;text-align:center;
+}
+.es-icon{
+  width:56px;height:56px;border-radius:14px;background:var(--brand-soft);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 16px;
+}
+.es-title{font-family:var(--display);font-size:17px;font-weight:700;color:var(--navy);margin-bottom:6px;}
+.es-text{font-size:13.5px;color:var(--ink-2);max-width:42ch;margin:0 auto 18px;line-height:1.6;}
+
+/* ---- §3 Dashboard ---- */
+.dash-greeting{font-family:var(--display);font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.02em;}
+
+.hero-card{
+  background:linear-gradient(135deg,#EAF2FF,#F6FAFF);
+  border-radius:var(--r-card);padding:24px 26px;
+  box-shadow:0 14px 34px rgba(20,121,255,.14);
+  display:flex;align-items:center;gap:22px;
+}
+.hero-card-body{flex:1;min-width:0;}
+.hero-card-title{font-family:var(--display);font-size:19px;font-weight:700;color:var(--navy);}
+.hero-card-sub{font-size:13.5px;color:var(--ink-2);margin:6px 0 16px;max-width:52ch;line-height:1.6;}
+.hero-glyph{font-size:54px;line-height:1;flex:none;}
+
+/* Capped at 2 per screen by convention (§6). */
+.mini-stat{border-radius:var(--r-card);padding:20px 22px;color:#fff;}
+.mini-stat.brand{background:var(--brand);box-shadow:0 12px 26px var(--brand-shadow);}
+.mini-stat.navy{background:var(--navy);box-shadow:0 12px 26px var(--navy-shadow);}
+.mini-stat .num{font-family:var(--display);font-size:26px;font-weight:700;line-height:1.1;}
+.mini-stat .lbl{font-size:11.5px;opacity:.85;margin-top:4px;}
+
+.dash-stat-row{display:flex;gap:22px;flex-wrap:wrap;margin-top:14px;}
+.dash-stat{font-size:12px;color:var(--ink-2);}
+.dash-stat b{display:block;font-family:var(--display);font-size:17px;font-weight:700;color:var(--navy);}
+
+/* Recommendation cards are nested — they don't carry their own shadow. */
+.rec-card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:16px 18px;margin-bottom:10px;box-shadow:none;
+}
+.rec-card:last-child{margin-bottom:0;}
+.rec-title{font-size:14px;font-weight:700;color:var(--navy);margin:8px 0 4px;}
+.rec-reason{font-size:12.5px;color:var(--ink-2);margin-bottom:12px;line-height:1.55;}
+
+.activity-list{display:flex;flex-direction:column;}
+.activity-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);}
+.activity-item:last-child{border-bottom:none;}
+.activity-dot{width:8px;height:8px;border-radius:50%;background:var(--brand);flex:none;box-shadow:0 0 0 3px var(--brand-soft);}
+.activity-day{font-size:11.5px;color:var(--ink-3);width:66px;flex:none;}
+.activity-text{font-size:13px;color:var(--navy);flex:1;min-width:0;}
+
+.dash-two-col{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start;}
+@media(max-width:1000px){.dash-two-col{grid-template-columns:1fr;}}
+
+/* ---- §4 Career Profile ---- */
+.identity-card{display:flex;align-items:center;gap:18px;}
+.identity-avatar{
+  width:62px;height:62px;border-radius:50%;background:var(--navy);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--display);font-size:22px;font-weight:700;flex:none;
+  box-shadow:0 10px 22px var(--navy-shadow);
+}
+.identity-name{font-family:var(--display);font-size:20px;font-weight:700;color:var(--navy);}
+.identity-tagline{font-size:13px;color:var(--ink-2);margin-top:3px;}
+.identity-contact{font-size:12px;color:var(--ink-3);margin-top:6px;display:flex;gap:14px;flex-wrap:wrap;}
+
+/* §Rule 2: selected is a soft tint + border, never a solid fill. */
+.chip-row{display:flex;gap:8px;flex-wrap:wrap;}
+.profile-chip-sel{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r-btn);
+  padding:9px 15px;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:.12s;
+}
+.profile-chip-sel:hover{border-color:var(--brand);color:var(--navy);}
+.profile-chip-sel.selected{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);}
+.profile-chip-sel.add{border-style:dashed;color:var(--brand);}
+
+.completeness-pct{font-family:var(--display);font-size:30px;font-weight:700;color:var(--navy);line-height:1;}
+.check-list{margin-top:16px;display:flex;flex-direction:column;gap:2px;}
+.check-item{
+  display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;
+  font-size:13px;color:var(--navy);background:none;border:none;width:100%;text-align:left;
+}
+.check-item.todo{cursor:pointer;}
+.check-item.todo:hover{background:var(--brand-soft);color:var(--brand);}
+.check-mark{width:16px;flex:none;font-size:12px;}
+.check-item.done .check-mark{color:var(--ok);}
+.check-item.todo .check-mark{color:var(--ink-3);}
+.check-item.done{color:var(--ink-2);}
+.check-arrow{margin-left:auto;color:var(--ink-3);font-size:12px;}
+.check-item.todo:hover .check-arrow{color:var(--brand);}
+
+/* Text + underline selection, not a filled pill (§4). */
+.cp-tabs{
+  display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;
+  border-bottom:1px solid var(--border);position:sticky;top:var(--topbar-h);
+  background:var(--bg);z-index:20;
+}
+.cp-tabs::-webkit-scrollbar{display:none;}
+.cp-tab{
+  background:none;border:none;border-bottom:2px solid transparent;
+  padding:12px 14px;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;white-space:nowrap;
+}
+.cp-tab:hover{color:var(--navy);}
+.cp-tab.active{color:var(--brand);border-bottom-color:var(--brand);}
+
+/* Neutral data chips — these are values, not selections. */
+.data-chip{
+  display:inline-flex;align-items:center;background:var(--navy-soft);color:var(--ink-2);
+  border-radius:var(--r-pill);padding:4px 11px;font-size:11.5px;font-weight:600;
+}
+
+.timeline{position:relative;padding-left:26px;}
+.timeline::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--border);}
+.timeline-entry{position:relative;padding-bottom:22px;}
+.timeline-entry::before{
+  content:"";position:absolute;left:-25px;top:5px;width:11px;height:11px;border-radius:50%;
+  background:var(--brand);box-shadow:0 0 0 3px var(--brand-soft);
+}
+.timeline-role{font-size:14.5px;font-weight:700;color:var(--navy);}
+.timeline-company{font-size:12.5px;color:var(--ink-2);margin-top:2px;}
+.timeline-dates{font-size:11.5px;color:var(--ink-3);margin-top:2px;}
+
+.skill-group{margin-bottom:18px;}
+.skill-group-label{
+  font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:8px;
+}
+.ai-suggest-card{background:var(--brand-soft);border-radius:14px;padding:16px 18px;}
+.ai-suggest-title{font-size:13px;font-weight:700;color:var(--brand);margin-bottom:6px;}
+
+/* ---- §5 Resume Library ---- */
+.lib-row{
+  display:flex;align-items:center;gap:14px;padding:16px 18px;
+  border-bottom:1px solid var(--border);
+}
+.lib-row:last-child{border-bottom:none;}
+.lib-icon{
+  width:40px;height:40px;border-radius:12px;background:var(--brand-soft);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;flex:none;
+}
+.lib-body{flex:1;min-width:0;}
+.lib-name{font-size:14px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px;}
+.lib-meta{font-size:12px;color:var(--ink-3);margin-top:3px;}
+.lib-actions{display:flex;align-items:center;gap:8px;flex:none;}
+
+.upload-drop{
+  border:1.5px dashed var(--border-strong);border-radius:14px;background:var(--bg);
+  padding:34px 24px;text-align:center;cursor:pointer;transition:.14s;
+}
+.upload-drop:hover,.upload-drop.drag{border-color:var(--brand);background:var(--brand-soft);}
+.upload-drop-text{font-size:13.5px;color:var(--ink-2);}
+.upload-drop-text b{color:var(--brand);font-weight:700;}
+.upload-drop-sub{font-size:11.5px;color:var(--ink-3);margin-top:6px;}

@@ -6,6 +6,8 @@ import {
   updateResumePrompts, updateResumeAtsTarget
 } from '../lib/firestore.js';
 import Modal from './Modal.jsx';
+import { buildResumePdf, downloadBlob } from '../lib/pdf.js';
+import { buildResumeDocx } from '../lib/docx.js';
 
 const DOC_ICON = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>;
 
@@ -23,7 +25,6 @@ const SUGGESTED_PROMPTS = [
 export default function ResumeLibraryView({ uid, state, setView, notify }) {
   const { resumes, setResumes, activeResumeId, setActiveResumeId } = state;
   const [addOpen, setAddOpen] = useState(false);
-  const [mode, setMode] = useState('upload');
   const [draftText, setDraftText] = useState('');
   const [draftLabel, setDraftLabel] = useState('');
   const [status, setStatus] = useState(null);
@@ -140,127 +141,163 @@ export default function ResumeLibraryView({ uid, state, setView, notify }) {
     setEditingResume(null);
   }
 
+  const fmtDate = ts => {
+    const d = ts?.toDate ? ts.toDate() : ts ? new Date(ts) : null;
+    return d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+  };
+
+  function downloadAs(resume, format) {
+    const doc = { name: resume.label, contact: '', sections: [{ heading: 'RESUME', paragraphs: (resume.text || '').split('\n').filter(Boolean) }] };
+    if (format === 'pdf') {
+      const { blob, filename } = buildResumePdf(doc, resume.label);
+      downloadBlob(blob, filename);
+    } else {
+      buildResumeDocx(doc, resume.label).then(({ blob, filename }) => downloadBlob(blob, filename));
+    }
+    setOverflowOpen(null);
+  }
+
   return (
     <section>
-      <h1 className="page-title">Resume library</h1>
-      <p className="page-sub">Manage base resumes and their AI tailoring preferences. The resume flagged <strong>Default for tailoring</strong> is the one the workspace starts from.</p>
-
-      {addOpen && (
-        <div className="panel">
-          <div className="panel-head"><h2>Add a resume</h2></div>
-          <div className="mode-toggle">
-            <button className={`mode-btn ${mode === 'upload' ? 'active' : ''}`} onClick={() => setMode('upload')}>⇪ Upload file</button>
-            <button className={`mode-btn ${mode === 'paste' ? 'active' : ''}`} onClick={() => setMode('paste')}>✎ Paste text</button>
-          </div>
-          {mode === 'upload' && (
-            <>
-              <div className={`dropzone ${dragOver ? 'drag' : ''}`}
-                onClick={() => fileInputRef.current.click()}
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={onDrop}>
-                <div className="dropzone-icon">⇪</div>
-                <div className="dropzone-text">Drag your resume here, or <span className="link">browse files</span></div>
-                <div className="dropzone-sub">.pdf, .docx and .txt/.md are read automatically · other formats saved as-is</div>
-              </div>
-              <input ref={fileInputRef} type="file" accept=".docx,.txt,.md,.pdf" style={{ display: 'none' }}
-                onChange={e => e.target.files.length && handleFile(e.target.files[0])} />
-              {status && (
-                status.kind === 'loading' ? <div className="loading"><span className="spinner"></span> {status.msg}</div> :
-                status.kind === 'error' ? <div className="error-box">{status.msg}</div> :
-                <div className="row-card" style={{ marginTop: 10 }}><div className="row-main"><div className="row-icon">{status.kind === 'ok' ? '✓' : '!'}</div><div className="row-title">{status.msg}</div></div></div>
-              )}
-            </>
-          )}
-          <div className="field" style={{ marginTop: 16 }}>
-            <span className="field-label">Extracted text — editable</span>
-            <textarea rows={8} value={draftText} onChange={e => setDraftText(e.target.value)}
-              placeholder="Paste or upload a resume to see extracted text here." />
-          </div>
-          <div className="field">
-            <span className="field-label">Label this resume</span>
-            <input type="text" value={draftLabel} onChange={e => setDraftLabel(e.target.value)} placeholder="e.g. Backend Engineer — Master" />
-          </div>
-          <div className="toolbar">
-            <button className="btn btn-ghost" onClick={() => { resetDraft(); setAddOpen(false); }}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleSaveResume}>Save to library →</button>
-          </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22 }}>
+        <div>
+          <h1 className="page-title">Resume library</h1>
+          <p className="page-sub" style={{ margin: 0 }}>Every resume you've uploaded or created. The default is what the workspace starts from.</p>
         </div>
-      )}
+        <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={() => setAddOpen(true)}>⇧ Add Resume</button>
+      </div>
 
-      <div className="lib-grid">
-        {resumes.map(r => (
-          <div className="resume-card" key={r.id}>
-            <div className="resume-card-top" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div className="resume-card-icon">{DOC_ICON}</div>
-                {r.id === activeResumeId && <span className="badge badge-success">Default for tailoring</span>}
+      {resumes.length === 0 ? (
+        <div className="es-card">
+          <div className="es-icon">⇧</div>
+          <div className="es-title">No resumes uploaded yet</div>
+          <p className="es-text">Add your resume once, then tailor it to any job description in seconds.</p>
+          <button className="btn btn-primary" onClick={() => setAddOpen(true)}>⇧ Add Resume</button>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0 }}>
+          {resumes.map(r => (
+            <div className="lib-row" key={r.id}>
+              <div className="lib-icon">{DOC_ICON}</div>
+              <div className="lib-body">
+                <div className="lib-name">
+                  {r.label}
+                  {r.id === activeResumeId && <span className="badge badge-primary">Default</span>}
+                </div>
+                <div className="lib-meta">
+                  {(r.text?.length || 0).toLocaleString()} chars
+                  {r.fileName ? ` · ${r.fileName}` : ''}
+                  {` · Uploaded ${fmtDate(r.createdAt)}`}
+                </div>
               </div>
-                {/* three-dot overflow menu for secondary + destructive actions */}
+              <div className="lib-actions">
+                <button className="btn btn-sm" onClick={() => openEdit(r)}>Open</button>
+                <button className="btn btn-sm btn-primary" onClick={() => { setActiveResumeId(r.id); setView?.('agent'); }}>Tailor →</button>
                 <div style={{ position: 'relative' }}>
-                  <button
-                    className="card-overflow-btn"
+                  <button className="card-overflow-btn"
                     onClick={e => { e.stopPropagation(); setOverflowOpen(overflowOpen === r.id ? null : r.id); }}
-                    title="More options"
-                  >···</button>
+                    title="More options">•••</button>
                   {overflowOpen === r.id && (
                     <>
                       <div className="dd-backdrop show" onClick={() => setOverflowOpen(null)} />
                       <div className="card-overflow-menu">
-                        <div className="card-overflow-item" onClick={() => { openEdit(r); setOverflowOpen(null); }}>Edit text</div>
+                        <div className="card-overflow-item" onClick={() => { openEdit(r); setOverflowOpen(null); }}>Rename / edit text</div>
                         <div className="card-overflow-item" onClick={() => { setExpandedId(expandedId === r.id ? null : r.id); setOverflowOpen(null); }}>AI preferences</div>
-                        {r.id !== activeResumeId && <div className="card-overflow-item" onClick={() => { setActiveResumeId(r.id); setOverflowOpen(null); }}>Set as default</div>}
+                        {r.id !== activeResumeId && (
+                          <div className="card-overflow-item" onClick={() => { setActiveResumeId(r.id); setOverflowOpen(null); }}>Set as default</div>
+                        )}
+                        <div className="card-overflow-item" onClick={() => downloadAs(r, 'pdf')}>Download PDF</div>
+                        <div className="card-overflow-item" onClick={() => downloadAs(r, 'docx')}>Download DOCX</div>
+                        <div className="card-overflow-sep" />
                         <div className="card-overflow-item danger" onClick={() => { handleDelete(r.id); setOverflowOpen(null); }}>Delete</div>
                       </div>
                     </>
                   )}
                 </div>
+              </div>
             </div>
-            <div className="resume-card-name">{r.label}</div>
-            <div className="resume-card-meta">
-              {(r.text?.length || 0).toLocaleString()} chars{r.fileName ? ` · ${r.fileName}` : ''}
-            </div>
-            <div className="resume-card-actions">
-              <button className="btn btn-sm btn-primary" onClick={() => { setActiveResumeId(r.id); setView?.('agent'); }}>Tailor this →</button>
-              {r.id !== activeResumeId && <button className="btn btn-sm" onClick={() => setActiveResumeId(r.id)}>Set default</button>}
-              <button className="btn btn-sm btn-ghost" onClick={() => openEdit(r)}>Edit</button>
-            </div>
+          ))}
+        </div>
+      )}
 
-            {expandedId === r.id && (
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-                <span className="field-label">Standing tailoring prompts</span>
+      {/* AI preferences drawer for a single resume */}
+      {expandedId && resumes.find(r => r.id === expandedId) && (() => {
+        const r = resumes.find(x => x.id === expandedId);
+        return (
+          <div className="card" style={{ padding: 20, marginTop: 16 }}>
+            <div className="panel-head">
+              <h2>AI preferences — {r.label}</h2>
+              <button className="btn btn-xs btn-ghost" onClick={() => setExpandedId(null)}>✕</button>
+            </div>
+            <span className="field-label">Standing tailoring prompts</span>
+            <div className="chips" style={{ marginBottom: 10 }}>
+              {(r.prompts || []).map((p, i) => (
+                <div className="chip editable" key={i}>{p} <span className="x" onClick={() => removePrompt(r, i)}>✕</span></div>
+              ))}
+            </div>
+            {SUGGESTED_PROMPTS.filter(s => !(r.prompts || []).includes(s)).length > 0 && (
+              <>
+                <span className="field-label" style={{ marginTop: 0 }}>Suggestions — click to add</span>
                 <div className="chips" style={{ marginBottom: 10 }}>
-                  {(r.prompts || []).map((p, i) => (
-                    <div className="chip editable" key={i}>{p} <span className="x" onClick={() => removePrompt(r, i)}>✕</span></div>
+                  {SUGGESTED_PROMPTS.filter(s => !(r.prompts || []).includes(s)).map(s => (
+                    <div className="chip add" key={s} onClick={() => addPrompt(r, s)}>+ {s}</div>
                   ))}
                 </div>
-                {SUGGESTED_PROMPTS.filter(s => !(r.prompts || []).includes(s)).length > 0 && (
-                  <>
-                    <span className="field-label" style={{ marginTop: 0 }}>Suggestions — click to add</span>
-                    <div className="chips" style={{ marginBottom: 10 }}>
-                      {SUGGESTED_PROMPTS.filter(s => !(r.prompts || []).includes(s)).map(s => (
-                        <div className="chip add" key={s} onClick={() => addPrompt(r, s)}>+ {s}</div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <div className="row-2" style={{ marginBottom: 16 }}>
-                  <input type="text" value={newPromptText} onChange={e => setNewPromptText(e.target.value)}
-                    placeholder="Or write your own..." onKeyDown={e => e.key === 'Enter' && addPrompt(r)} />
-                  <button className="btn btn-sm btn-ghost" style={{ justifySelf: 'start' }} onClick={() => addPrompt(r)}>+ Add</button>
-                </div>
-                <span className="field-label">Target ATS match — {r.atsTarget || 92}%</span>
-                <input type="range" min="60" max="100" value={r.atsTarget || 92} onChange={e => changeAtsTarget(r, e.target.value)} style={{ width: '100%' }} />
-              </div>
+              </>
             )}
+            <div className="row-2" style={{ marginBottom: 16 }}>
+              <input type="text" value={newPromptText} onChange={e => setNewPromptText(e.target.value)}
+                placeholder="Or write your own..." onKeyDown={e => e.key === 'Enter' && addPrompt(r)} />
+              <button className="btn btn-sm btn-ghost" style={{ justifySelf: 'start' }} onClick={() => addPrompt(r)}>+ Add</button>
+            </div>
+            <span className="field-label">Target ATS match — {r.atsTarget || 92}%</span>
+            <input type="range" min="60" max="100" value={r.atsTarget || 92}
+              onChange={e => changeAtsTarget(r, e.target.value)} style={{ width: '100%' }} />
           </div>
-        ))}
+        );
+      })()}
 
-        <div className="upload-card" onClick={() => setAddOpen(true)}>
-          <div className="dropzone-icon">⇪</div>
-          <span>+ Add a resume</span>
+      {/* §5 Add Resume — a straightforward upload flow, no path chooser */}
+      <Modal open={addOpen} onClose={() => { resetDraft(); setAddOpen(false); }} title="Add Resume">
+        <p className="page-sub" style={{ marginTop: -4 }}>Upload your resume and we'll pull the text out automatically.</p>
+
+        <div className={`upload-drop ${dragOver ? 'drag' : ''}`}
+          onClick={() => fileInputRef.current.click()}
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}>
+          <div style={{ fontSize: 26, marginBottom: 8 }}>⇧</div>
+          <div className="upload-drop-text">Drag a file here, or <b>browse</b></div>
+          <div className="upload-drop-sub">PDF, DOCX, TXT and MD are read automatically</div>
         </div>
-      </div>
+        <input ref={fileInputRef} type="file" accept=".docx,.txt,.md,.pdf" style={{ display: 'none' }}
+          onChange={e => e.target.files.length && handleFile(e.target.files[0])} />
+
+        {status && (
+          status.kind === 'loading' ? <div className="loading" style={{ marginTop: 12 }}><span className="spinner"></span> {status.msg}</div> :
+          status.kind === 'error' ? <div className="error-box" style={{ marginTop: 12 }}>{status.msg}</div> :
+          <div className="row-card" style={{ marginTop: 12 }}><div className="row-main"><div className="row-icon">{status.kind === 'ok' ? '✓' : '!'}</div><div className="row-title">{status.msg}</div></div></div>
+        )}
+
+        {(draftText || status) && (
+          <>
+            <div className="field" style={{ marginTop: 16 }}>
+              <span className="field-label">Extracted text — editable</span>
+              <textarea rows={7} value={draftText} onChange={e => setDraftText(e.target.value)}
+                placeholder="Upload a file, or paste your resume text here." />
+            </div>
+            <div className="field">
+              <span className="field-label">Label this resume</span>
+              <input type="text" value={draftLabel} onChange={e => setDraftLabel(e.target.value)} placeholder="e.g. Backend Engineer — Master" />
+            </div>
+          </>
+        )}
+
+        <div className="toolbar">
+          <button className="btn btn-ghost" onClick={() => { resetDraft(); setAddOpen(false); }}>Cancel</button>
+          <button className="btn btn-primary" disabled={!draftText.trim()} onClick={handleSaveResume}>Upload</button>
+        </div>
+      </Modal>
 
       <Modal open={!!editingResume} onClose={() => setEditingResume(null)} title={`Edit — ${editingResume?.label || ''}`}>
         <textarea rows={14} value={editText} onChange={e => setEditText(e.target.value)} />

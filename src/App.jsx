@@ -129,7 +129,7 @@ function Workspace() {
         <Topbar view={view} setView={setView} credits={credits} notifications={notifications} />
         <main className="main">
           <Keep active={view === 'dashboard'}>
-            <DashboardOverview state={state} setView={setView} notify={notify} />
+            <DashboardOverview uid={uid} state={state} setView={setView} credits={credits} notify={notify} />
           </Keep>
           <Keep active={view === 'tailor' || view === 'agent'}>
             <AgentView uid={uid} state={state} setView={setView} notify={notify} credits={credits} onCreditsChange={handleCreditsChange} />
