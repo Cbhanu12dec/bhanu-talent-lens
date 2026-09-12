@@ -68,8 +68,9 @@ export async function uploadResumeFile(uid, file) {
 
 export async function listCareerProfiles(uid) {
   const snap = await getDocs(collection(db, 'users', uid, 'careerProfile'));
-  if (snap.empty) return [{ id: 'main', name: 'Primary Profile', isDefault: true, experience: [], education: [], skills: [] }];
-  const profiles = snap.docs.map(d => ({ id: d.id, name: 'Untitled Profile', isDefault: false, experience: [], education: [], skills: [], ...d.data() }));
+  const blank = { experience: [], education: [], skills: [], certifications: [], projects: [], details: {} };
+  if (snap.empty) return [{ id: 'main', name: 'Primary Profile', isDefault: true, ...blank }];
+  const profiles = snap.docs.map(d => ({ id: d.id, name: 'Untitled Profile', isDefault: false, ...blank, ...d.data() }));
   if (!profiles.some(p => p.isDefault)) profiles[0].isDefault = true;
   return profiles;
 }
@@ -129,10 +130,45 @@ export async function addEducation(uid, entry, profileId = 'main') {
   return item;
 }
 
+export async function updateEducation(uid, id, patch, profileId = 'main') {
+  const profile = await getCareerProfile(uid, profileId);
+  const updated = (profile.education || []).map(e => e.id === id ? { ...e, ...patch } : e);
+  await setDoc(doc(db, 'users', uid, 'careerProfile', profileId), { education: updated }, { merge: true });
+}
+
 export async function deleteEducation(uid, id, profileId = 'main') {
   const profile = await getCareerProfile(uid, profileId);
   const filtered = (profile.education || []).filter(e => e.id !== id);
   await setDoc(doc(db, 'users', uid, 'careerProfile', profileId), { education: filtered }, { merge: true });
+}
+
+export async function addCertification(uid, entry, profileId = 'main') {
+  const id = 'cert_' + Date.now();
+  const item = { id, ...entry };
+  await setDoc(doc(db, 'users', uid, 'careerProfile', profileId), { certifications: arrayUnion(item) }, { merge: true });
+  return item;
+}
+
+export async function updateCertification(uid, id, patch, profileId = 'main') {
+  const profile = await getCareerProfile(uid, profileId);
+  const updated = (profile.certifications || []).map(c => c.id === id ? { ...c, ...patch } : c);
+  await setDoc(doc(db, 'users', uid, 'careerProfile', profileId), { certifications: updated }, { merge: true });
+}
+
+export async function deleteCertification(uid, id, profileId = 'main') {
+  const profile = await getCareerProfile(uid, profileId);
+  const filtered = (profile.certifications || []).filter(c => c.id !== id);
+  await setDoc(doc(db, 'users', uid, 'careerProfile', profileId), { certifications: filtered }, { merge: true });
+}
+
+// Personal details live on the profile doc itself, not in a sub-array.
+export async function updateProfileDetails(uid, details, profileId = 'main') {
+  await setDoc(doc(db, 'users', uid, 'careerProfile', profileId), { details }, { merge: true });
+}
+
+// Manual drag order is preserved verbatim — never re-sorted by date (§3).
+export async function reorderExperience(uid, experience, profileId = 'main') {
+  await setDoc(doc(db, 'users', uid, 'careerProfile', profileId), { experience }, { merge: true });
 }
 
 export async function addSkill(uid, label, profileId = 'main') {
