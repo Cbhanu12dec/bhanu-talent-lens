@@ -18,6 +18,11 @@ import TemplatesView from './components/TemplatesView.jsx';
 import { getProfileInfo, listResumes } from './lib/firestore.js';
 import { ensureAccount } from './lib/billing.js';
 
+const ADMIN_EMAIL = 'cbhanu12dec@gmail.com';
+// Views that require admin. The real boundary is server-side `requireAdmin`;
+// this only keeps the UI from offering something the API would reject.
+const ADMIN_VIEWS = new Set(['admin']);
+
 function getCheckoutStatusFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const status = params.get('checkout'); // 'success' | 'cancel' | null
@@ -42,7 +47,14 @@ function Workspace() {
   const { user } = useAuth();
   const uid = user.uid;
   const [checkoutStatus] = useState(getCheckoutStatusFromUrl);
-  const [view, setView] = useState(checkoutStatus ? 'billing' : 'dashboard');
+  const [view, setViewRaw] = useState(checkoutStatus ? 'billing' : 'dashboard');
+  const isAdmin = user?.email === ADMIN_EMAIL;
+
+  // §0 route guard: a non-admin asking for an admin view is sent to the
+  // dashboard rather than shown a 403 — a 403 confirms the route exists.
+  const setView = useCallback(next => {
+    setViewRaw(ADMIN_VIEWS.has(next) && !isAdmin ? 'dashboard' : next);
+  }, [isAdmin]);
 
   const [profileInfo, setProfileInfo] = useState({});
   const [resumes, setResumes] = useState([]);
@@ -154,9 +166,12 @@ function Workspace() {
             <ComingSoonView title="Cover letters" sub="Your saved cover letters, in one place." icon="✉️"
               blurb="Every cover letter you generate from the Dashboard will be saved here for reuse and editing, instead of living only in a single session." />
           </Keep>
-          <Keep active={view === 'admin'}>
-            <AdminView notify={notify} />
-          </Keep>
+          {/* Never mounted for non-admins — absent from the DOM, not hidden. */}
+          {isAdmin && (
+            <Keep active={view === 'admin'}>
+              <AdminView notify={notify} />
+            </Keep>
+          )}
           <Keep active={view === 'careerprofile'}>
             <CareerProfileView uid={uid} notify={notify} />
           </Keep>

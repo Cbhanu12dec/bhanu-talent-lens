@@ -1445,18 +1445,31 @@ Weave each missing requirement into a real accomplishment bullet or the summary 
   if (task === 'domainAdmin') {
     requireAdmin(request);
     const { action, domainId, data } = payload || {};
+    // §0 audit trail — recorded on every mutation from day one so it never
+    // becomes a backfill problem.
+    const audit = {
+      updatedBy: request.auth.uid,
+      updatedByEmail: request.auth.token.email || null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
 
     if (action === 'create') {
       const ref = db.collection('domains').doc();
-      await ref.set({ name: data.name, summary: data.summary, status: 'draft', categories: [], createdAt: admin.firestore.FieldValue.serverTimestamp() });
+      await ref.set({
+        name: data.name, summary: data.summary, status: 'draft', categories: [],
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdBy: request.auth.uid,
+        createdByEmail: request.auth.token.email || null,
+        ...audit,
+      });
       return { id: ref.id };
     }
     if (action === 'update') {
-      await db.collection('domains').doc(domainId).set(data, { merge: true });
+      await db.collection('domains').doc(domainId).set({ ...data, ...audit }, { merge: true });
       return { ok: true };
     }
     if (action === 'publish') {
-      await db.collection('domains').doc(domainId).set({ status: data.status }, { merge: true });
+      await db.collection('domains').doc(domainId).set({ status: data.status, ...audit }, { merge: true });
       return { ok: true };
     }
     if (action === 'delete') {

@@ -203,8 +203,7 @@ function CouponsTab() {
   );
 }
 
-/* ===================== DOMAIN BUILDER TAB ===================== */
-/* ===================== DOMAIN BUILDER TAB ===================== */
+/* ===================== DOMAIN LIBRARY TAB ===================== */
 
 // Reusable one-click instructions. Most sub-domains need some combination of
 // these, so they're toggles rather than something to retype per sub-domain.
@@ -492,6 +491,19 @@ function DomainBuilderTab({ notify }) {
                   onClick={() => { setNewSubOpen(v => !v); setNewSubError(''); setNewSubName(''); setNewSubSkills([]); setNewSubInstrs([]); setNewSubSkillInput(''); setNewSubInstrInput(''); }}>
                   {newSubOpen ? '✕ Cancel' : '+ New Sub-domain'}
                 </button>
+
+                {/* §0 audit trail */}
+                {(dom.createdByEmail || dom.updatedByEmail) && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--text-muted)' }}>
+                    {dom.createdByEmail && <span>Created by <strong style={{ color: 'var(--text-secondary)' }}>{dom.createdByEmail}</strong></span>}
+                    {dom.updatedByEmail && (
+                      <span>
+                        Last updated by <strong style={{ color: 'var(--text-secondary)' }}>{dom.updatedByEmail}</strong>
+                        {dom.updatedAt?.toDate ? ` · ${dom.updatedAt.toDate().toLocaleString()}` : ''}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* New sub-domain inline form */}
@@ -697,7 +709,7 @@ const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'users', label: 'Users' },
   { key: 'coupons', label: 'Coupons' },
-  { key: 'domains', label: 'Domain Builder' },
+  { key: 'domains', label: 'Domain Library' },
   { key: 'system', label: 'System' },
 ];
 
@@ -705,9 +717,9 @@ export default function AdminView({ notify }) {
   const { user } = useAuth();
   const [tab, setTab] = useState('overview');
 
-  if (user?.email !== ADMIN_EMAIL) {
-    return <div className="empty-state" style={{ padding: 80 }}><h3>Access denied</h3><p>Admin access only.</p></div>;
-  }
+  // §0: render nothing rather than an "access denied" page — acknowledging the
+  // route confirms it exists. App.jsx redirects non-admins before reaching here.
+  if (user?.email !== ADMIN_EMAIL) return null;
 
   return (
     <section>
