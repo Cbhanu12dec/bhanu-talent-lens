@@ -1141,9 +1141,34 @@ JOB TITLE: ${jobDescription.title || ''}`;
       }
     }
 
+    // Contact facts are assembled here rather than left to the model, so the
+    // name/phone/links can't be dropped or invented.
+    const d = careerProfile.details || {};
+    const contactLine = [d.phone, d.email, d.linkedin, d.github, d.portfolio, d.location]
+      .map(v => String(v || '').trim()).filter(Boolean).join(' | ');
+
     const groundTruth = {
-      experience: (careerProfile.experience || []).map(e => ({ title: e.title, company: e.company, startDate: e.startDate, endDate: e.endDate, location: e.location })),
-      education: (careerProfile.education || []).map(e => ({ school: e.school, degree: e.degree, fieldOfStudy: e.fieldOfStudy, startDate: e.startDate, endDate: e.endDate })),
+      personal: {
+        fullName: d.fullName || '',
+        tagline: d.tagline || '',
+        location: d.location || '',
+        email: d.email || '',
+        phone: d.phone || '',
+        linkedin: d.linkedin || '',
+        github: d.github || '',
+        portfolio: d.portfolio || '',
+      },
+      experience: (careerProfile.experience || []).map(e => ({
+        title: e.title, company: e.company, startDate: e.startDate, endDate: e.endDate,
+        location: e.location, bullets: e.bullets || [], skills: e.skills || [],
+      })),
+      education: (careerProfile.education || []).map(e => ({
+        school: e.school, degree: e.degree, fieldOfStudy: e.fieldOfStudy,
+        startDate: e.startDate, endDate: e.endDate, location: e.location, gpa: e.gpa,
+      })),
+      certifications: (careerProfile.certifications || []).map(c => ({
+        name: c.name, issuer: c.issuer, issueDate: c.issueDate, expiryDate: c.expiryDate,
+      })),
       skills: (careerProfile.skills || []).map(s => s.label),
     };
 
@@ -1166,6 +1191,9 @@ Do not carry over generic duties. Rebuild each bullet from the underlying projec
 
 PUNCTUATION - hard rule
 Never use em dashes or en dashes anywhere in the output. Use commas, colons, or separate sentences instead. For date ranges use a plain hyphen, e.g. "Jan 2020 - Mar 2023".
+
+IDENTITY - use the ground truth verbatim
+The "personal" block in the ground truth holds the candidate's real name and contact details. Copy "fullName" into "name" exactly as written. Build "contact" from the phone, email, linkedin, github, portfolio and location that are present, pipe-separated, in that order. Never invent, abbreviate, or omit a contact field that was provided, and never substitute a placeholder like "Candidate Name" or "email@example.com".
 
 REVISION MODE
 If the user message includes an EXISTING DRAFT, you are editing that draft, not authoring a new resume. Preserve its structure, section order, and wording exactly except where an instruction requires a change. Change the minimum needed to satisfy the instructions, then re-check the whole document against the ATS rules below. If no EXISTING DRAFT is provided, build the resume from the ground truth as described above.
@@ -1223,6 +1251,16 @@ Apply the POSITIONING instructions above to the draft as targeted edits. Keep ev
     }
 
     let content = await runAgentBuildPass(userPrompt, 'agentBuild');
+
+    // Identity is a fact, not a generation target — overwrite whatever the model
+    // produced with the profile's real values.
+    function applyIdentity(resume) {
+      if (d.fullName) resume.name = d.fullName;
+      if (contactLine) resume.contact = contactLine;
+      return resume;
+    }
+    content = applyIdentity(content);
+
     let { matches: requirementMatches, score: matchScore } = scoreAgainstRequirements(content);
 
     // Same measured-then-repair loop the tailor path uses: the first draft is
@@ -1245,7 +1283,7 @@ ${buildRepair}
 Never invent employers, dates, credentials, or metrics that are not in the ground truth.`, 'agentBuild_repair');
         const rescored = scoreAgainstRequirements(repaired);
         if (rescored.score > matchScore) {
-          content = repaired;
+          content = applyIdentity(repaired);
           requirementMatches = rescored.matches;
           matchScore = rescored.score;
         }

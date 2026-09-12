@@ -234,6 +234,17 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   const profile = profiles.find(p => p.id === profileId) || null;
   const baseResume = resumes.find(r => r.id === baseResumeId);
 
+  // The builder needs real identity fields; fall back to the account's own
+  // name/email when this profile's personal details haven't been filled in.
+  const profileForBuild = profile && {
+    ...profile,
+    details: {
+      ...profile.details,
+      fullName: profile.details?.fullName || profileInfo?.name || '',
+      email: profile.details?.email || profileInfo?.sendingEmail || '',
+    },
+  };
+
   const allDomains = [...domains, ...customDomains];
   const selectedDomain = allDomains.find(d => d.id === selectedDomainId) || null;
   const filteredDomains = domainQuery.trim()
@@ -301,7 +312,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
       addLog(BUILD_STAGES.scratch[3]); advanceStage();
       const withInstructions = { ...strat, positioning: appendCustom(strat.positioning, [domainDirective, customInstructions].filter(Boolean).join(' ')) };
       const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
-        agentRunId: runDoc.id, careerProfile: profile, jobDescription: fullJd, strategy: withInstructions, domainId: effectiveDomainId,
+        agentRunId: runDoc.id, careerProfile: profileForBuild, jobDescription: fullJd, strategy: withInstructions, domainId: effectiveDomainId,
       });
       addLog(BUILD_STAGES.scratch[4]); advanceStage();
       addLog(`Build complete — match score ${matchScore}%`);
@@ -331,7 +342,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     addLog('Rebuilding with your instructions…');
     try {
       const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
-        agentRunId: runId, careerProfile: profile, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId,
+        agentRunId: runId, careerProfile: profileForBuild, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId,
       });
       addLog(`Build complete — match score ${matchScore}%`);
       const v = await getResumeVersion(uid, versionId);
@@ -426,7 +437,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
         addLog(basedOnDraft ? 'Applying your instructions to the draft…' : 'Rewriting bullets against the JD…');
         const updatedStrategy = { ...strategy, positioning: appendCustom(strategy.positioning, [domainDirective, directive].filter(Boolean).join(' ')) };
         const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
-          agentRunId: runId, careerProfile: profile, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId,
+          agentRunId: runId, careerProfile: profileForBuild, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId,
           previousResume: basedOnDraft ? version.content : undefined,
         });
         addLog('Scoring match…');
