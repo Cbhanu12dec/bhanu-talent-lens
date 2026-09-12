@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { getTheme, toggleTheme } from '../lib/theme.js';
 
 const TITLES = {
   dashboard: 'Dashboard',
@@ -32,7 +31,6 @@ function initials(nameOrEmail) {
 export default function Topbar({ view, setView, credits, notifications }) {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(null);
-  const [theme, setThemeState] = useState(getTheme);
   const unread = (notifications || []).filter(n => n.unread).length;
 
   function toggle(w) { setOpen(o => o === w ? null : w); }
@@ -53,11 +51,6 @@ export default function Topbar({ view, setView, credits, notifications }) {
         <div className="credits-pill" onClick={() => setView('billing')} style={{ cursor: 'pointer' }}>
           ✦ {credits ?? '—'} credits
         </div>
-
-        {/* Theme toggle */}
-        <button className="icon-btn" onClick={() => setThemeState(toggleTheme())} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
-          {theme === 'light' ? MOON : SUN}
-        </button>
 
         {/* Notifications */}
         <div className="dd-wrap">

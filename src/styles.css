@@ -1,109 +1,87 @@
 /* ============================================================
-   RESUMECRAFT PRO — Design System v3 (Dual theme)
-   One layout, two moods. Colors are re-declared per theme on the
-   html element; components only ever reference the variables, so
-   the same markup renders in both with no component branching.
-   Supersedes v2 (Olive + Hatch) and v1 (Sage + Pastel).
+   RESUMECRAFT PRO — Design System v4 (Soft Blue + Colored Shadows)
+   Single theme. Clean break from v3's light/dark toggle, v2's olive
+   hatch and v1's sage pastels.
+
+   Signature technique (§2): a shadow is always the hue of the element
+   casting it, at reduced opacity. Plain white cards are the only
+   exception and fall back to --navy-shadow as the neutral default.
    ============================================================ */
-
-/* ---- LIGHT: "Talentry" — monochrome, black CTAs, colour only in
-   logos and the single verified check ---- */
-html[data-theme="light"]{
-  --bg-wash: radial-gradient(circle at 12% 8%, rgba(120,160,255,.18), transparent 40%),
-             radial-gradient(circle at 88% 82%, rgba(255,140,190,.16), transparent 42%),
-             #F6F7FA;
-  --bg-solid:#F6F7FA;
-  --card:#FFFFFF;
-  --border:#E7E8EC;
-  --ink:#101114;
-  --ink-2:#6B6E76;
-  --ink-3:#A2A4AC;
-  --cta-bg:#101114;
-  --cta-text:#FFFFFF;
-  --cta-hover:#000000;
-  --pill-sel-bg:#101114;
-  --pill-sel-text:#FFFFFF;
-  --pill-bg:#FFFFFF;
-  --pill-border:#E7E8EC;
-  --verified:#22B573;
-  --verified-soft:#E6F8EF;
-  --card-shadow: 0 1px 2px rgba(20,20,30,.04), 0 10px 26px rgba(20,20,30,.05);
-  --sunken:#F2F3F6;
-  --danger:#D0402B;
-  --danger-soft:#FCEAE6;
-  --warn:#9A6B12;
-  --warn-soft:#FBF1DC;
-}
-
-/* ---- DARK: "Midnight AI" — navy canvas, exactly one gradient,
-   reserved for score / AI / action moments ---- */
-html[data-theme="dark"]{
-  --bg-wash:
-    radial-gradient(circle at 15% 15%, rgba(63,110,255,.20), transparent 40%),
-    radial-gradient(circle at 85% 20%, rgba(150,90,255,.16), transparent 45%),
-    radial-gradient(circle at 60% 90%, rgba(255,90,180,.10), transparent 40%),
-    #0A0D16;
-  --bg-solid:#0A0D16;
-  --card:#121729;
-  --border:rgba(255,255,255,.08);
-  --ink:#EDEFF7;
-  --ink-2:#9BA1B5;
-  --ink-3:#6E7488;
-  --cta-bg:linear-gradient(120deg,#3F6EFF 0%,#9C5CFF 55%,#FF5AB4 100%);
-  --cta-text:#FFFFFF;
-  --cta-hover:linear-gradient(120deg,#3560E0 0%,#8A4CE8 55%,#E84EA0 100%);
-  --pill-sel-bg:linear-gradient(120deg,#3F6EFF,#9C5CFF);
-  --pill-sel-text:#FFFFFF;
-  --pill-bg:rgba(255,255,255,.04);
-  --pill-border:rgba(255,255,255,.10);
-  --verified:#3FE0A5;
-  --verified-soft:rgba(63,224,165,.12);
-  --card-shadow: 0 0 0 1px rgba(255,255,255,.03), 0 20px 50px rgba(0,0,0,.5);
-  --sunken:rgba(255,255,255,.04);
-  --danger:#FF7A66;
-  --danger-soft:rgba(255,122,102,.12);
-  --warn:#E0B65C;
-  --warn-soft:rgba(224,182,92,.12);
-}
-
 :root{
-  /* Non-colour primitives are theme-independent. */
-  --r-sm:8px; --r-btn:999px; --r-input:10px; --r-card:14px; --r-bigcard:16px; --r-pill:999px;
+  --bg:#F3F7FF;
+  --card:#FFFFFF;
+
+  /* main/brand */
+  --brand:#1479FF;
+  --brand-soft:rgba(20,121,255,.10);
+  --brand-shadow:rgba(20,121,255,.30);
+
+  /* basic (background/font) color */
+  --navy:#193B68;
+  --navy-soft:rgba(25,59,104,.08);
+  --navy-shadow:rgba(25,59,104,.18);
+
+  /* accents — same hue family, variety without leaving blue */
+  --a-sky:#14D2FF;  --a-sky-soft:rgba(20,210,255,.12);  --a-sky-shadow:rgba(20,210,255,.30);
+  --a-mid:#14A5FF;  --a-mid-soft:rgba(20,165,255,.12);  --a-mid-shadow:rgba(20,165,255,.30);
+  --a-cyan:#14EBFF; --a-cyan-soft:rgba(20,235,255,.12); --a-cyan-shadow:rgba(20,235,255,.30);
+
+  --ink-2:#7C89A3;
+  --ink-3:#AAB4C6;
+  --border:#E7EDFA;
+
+  /* Semantic states still need full triplets (§1). */
+  --ok:#11B981;     --ok-soft:rgba(17,185,129,.12);   --ok-shadow:rgba(17,185,129,.28);
+  --bad:#F0526D;    --bad-soft:rgba(240,82,109,.12);  --bad-shadow:rgba(240,82,109,.28);
+  --warn:#E8A33D;   --warn-soft:rgba(232,163,61,.14); --warn-shadow:rgba(232,163,61,.28);
+
+  --r-sm:12px; --r-btn:999px; --r-input:14px; --r-card:20px; --r-bigcard:22px; --r-pill:999px;
+  --shadow-card:0 14px 34px var(--navy-shadow);
+  --shadow-brand:0 10px 22px var(--brand-shadow);
+
+  --display:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
   --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-  --display:var(--sans);
   --mono:'JetBrains Mono','IBM Plex Mono',monospace;
   --sidebar-w:240px;
   --topbar-h:64px;
 
-  /* Component-facing names mapped onto the theme tokens above. Declared
-     once here; they resolve against whichever theme block is active. */
-  --bg:var(--bg-solid);
-  --canvas:var(--bg-solid);
+  /* ---- Component-facing names mapped onto the tokens above ---- */
+  --ink:var(--navy);
+  --canvas:var(--bg);
+  --bg-solid:var(--bg);
   --surface:var(--card);
+  --paper:var(--card);
+  --sunken:#EDF2FC;
   --surface-sunken:var(--sunken);
   --surface-2:var(--sunken);
   --surface-hover:var(--sunken);
-  --paper:var(--card);
-  --text:var(--ink);
+  --text:var(--navy);
   --text-2:var(--ink-2);
   --text-3:var(--ink-3);
   --text-secondary:var(--ink-2);
   --text-muted:var(--ink-3);
-  --border-strong:var(--pill-border);
-  --primary:var(--ink);
-  --primary-hover:var(--cta-hover);
-  --primary-subtle:var(--sunken);
-  --brand:var(--ink);
-  --brand-hover:var(--cta-hover);
-  --brand-soft:var(--sunken);
-  --brand-dark:var(--ink);
-  --success:var(--verified);
-  --success-subtle:var(--verified-soft);
-  --good:var(--verified);
-  --good-soft:var(--verified-soft);
-  --bad:var(--danger);
-  --bad-soft:var(--danger-soft);
-  --danger-subtle:var(--danger-soft);
+  --border-strong:#D8E2F4;
+  --pill-bg:var(--sunken);
+  --pill-border:var(--border);
+  --pill-sel-bg:var(--brand-soft);
+  --pill-sel-text:var(--brand);
+  --primary:var(--brand);
+  --primary-hover:#0F63D6;
+  --primary-subtle:var(--brand-soft);
+  --brand-hover:#0F63D6;
+  --brand-dark:#0F63D6;
+  --cta-bg:var(--brand);
+  --cta-text:#FFFFFF;
+  --cta-hover:#0F63D6;
+  --success:var(--ok);
+  --success-subtle:var(--ok-soft);
+  --good:var(--ok);
+  --good-soft:var(--ok-soft);
+  --verified:var(--ok);
+  --verified-soft:var(--ok-soft);
+  --danger:var(--bad);
+  --danger-soft:var(--bad-soft);
+  --danger-subtle:var(--bad-soft);
   --warning:var(--warn);
   --warning-subtle:var(--warn-soft);
   --admin:var(--warn);
@@ -112,39 +90,38 @@ html[data-theme="dark"]{
   --sidebar-bg:var(--card);
   --sidebar-hover:var(--sunken);
   --sidebar-text:var(--ink-2);
-  --sidebar-text-active:var(--ink);
-  --shadow-card:var(--card-shadow);
-  --shadow-sm:var(--card-shadow);
-  --shadow-md:var(--card-shadow);
-  --shadow-lg:var(--card-shadow);
-  --shadow-modal:var(--card-shadow);
-  --shadow-xl:var(--card-shadow);
-  --shadow-hover:var(--card-shadow);
+  --sidebar-text-active:var(--brand);
+  --shadow-sm:var(--shadow-card);
+  --shadow-md:var(--shadow-card);
+  --shadow-lg:var(--shadow-card);
+  --shadow-hover:0 18px 40px var(--navy-shadow);
+  --shadow-modal:0 24px 60px var(--navy-shadow);
+  --shadow-xl:var(--shadow-modal);
   --r-job:var(--r-card);
   --r-panel:var(--r-bigcard);
-  --r-modal:16px;
+  --r-modal:var(--r-bigcard);
   --r-md:var(--r-card);
   --r-lg:var(--r-bigcard);
   --radius-card:var(--r-card);
   --radius-btn:var(--r-btn);
   --radius-input:var(--r-input);
   /* legacy aliases kept so existing components don't break */
-  --accent:var(--ink);
-  --accent-dim:var(--sunken);
-  --primary-start:var(--ink);
-  --primary-end:var(--ink);
-  --primary-dim:var(--sunken);
-  --violet:var(--ink);
-  --error:var(--danger);
-  --error-dim:var(--danger-soft);
+  --accent:var(--brand);
+  --accent-dim:var(--brand-soft);
+  --primary-start:var(--brand);
+  --primary-end:var(--brand);
+  --primary-dim:var(--brand-soft);
+  --violet:var(--brand);
+  --error:var(--bad);
+  --error-dim:var(--bad-soft);
   --warning-dim:var(--warn-soft);
-  --success-dim:var(--verified-soft);
+  --success-dim:var(--ok-soft);
   --dim:var(--ink-3);
   --muted:var(--ink-2);
   --line:var(--border);
-  --line-bright:var(--pill-border);
+  --line-bright:var(--border-strong);
   --divider:var(--border);
-  --track:var(--sunken);
+  --track:#EDF2FC;
 }
 
 /* ============================================================ RESET */
@@ -1356,179 +1333,165 @@ table tbody tr{border-top:1px solid var(--border);}
 
 
 /* ============================================================
-   DESIGN SYSTEM v3 — DUAL THEME COMPONENTS
-   Loaded last so it overrides the superseded v1/v2 rules above.
-   Every rule below is written once and works in both themes,
-   because it only ever references theme tokens (§1).
+   DESIGN SYSTEM v4 — SOFT BLUE + COLORED SHADOWS
+   Loaded last so it overrides the superseded v1/v2/v3 rules above.
    ============================================================ */
 
-/* ---- Ambient wash: the page owns the only decorative background ---- */
-body{
-  font-family:var(--sans);
-  background:var(--bg-wash);
-  background-attachment:fixed;
-  color:var(--ink);
+body{font-family:var(--sans);background:var(--bg);color:var(--navy);}
+.shell{background:var(--bg);}
+
+/* ---- §4 Typography: Poppins headings, Inter everything else ---- */
+h1,h2,h3,.page-title,.card-heading,.dash-greeting,.panel-head h2,
+.section-title-row h2,.stat-card .value,.stat-num,.result-score,
+.logo-text .name,.brand-text .name{font-family:var(--display);}
+.dash-greeting{font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.02em;}
+h1.page-title{font-size:24px;font-weight:700;color:var(--navy);letter-spacing:-.02em;}
+.page-sub{font-size:12.5px;color:var(--ink-2);}
+.card-heading,.panel-head h2,.section-title-row h2{font-size:16px;font-weight:600;color:var(--navy);}
+.logo-text .name,.brand-text .name{font-size:16px;font-weight:700;color:var(--navy);}
+.field-label{font-size:12.5px;font-weight:600;color:var(--navy);}
+.field-hint{font-size:11.5px;color:var(--ink-3);}
+
+/* ---- §5 Card: shadow does the separating, no border (§6) ---- */
+.card,.panel,.big-card,.result-shell,.opt-block,.status-card,.resume-card,.job-card{
+  background:var(--card);border:none;border-radius:var(--r-card);
+  box-shadow:var(--shadow-card);
 }
-.shell{background:transparent;}
+.doc,.paper{background:var(--card);border:none;box-shadow:var(--shadow-card);}
 
-/* ---- §5 Typography: Inter only; weight does the work ---- */
-h1,h2,h3,.page-title,.card-heading,.dash-greeting,.stat-card .value,.result-score{font-family:var(--sans);}
-.dash-greeting{font-size:32px;font-weight:800;letter-spacing:-.025em;color:var(--ink);}
-h1.page-title{font-size:26px;font-weight:800;letter-spacing:-.02em;color:var(--ink);}
-.page-sub{color:var(--ink-2);font-size:13px;}
-.card-heading,.panel-head h2,.section-title-row h2{font-size:16px;font-weight:700;color:var(--ink);}
-.logo-text .name,.brand-text .name,.logo-name{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
-
-/* ---- §4 Card: border AND shadow, both themes ---- */
-.card,.panel,.big-card,.stat-card,.result-shell,.opt-block,.status-card,.resume-card{
-  background:var(--card);border:1px solid var(--border);border-radius:var(--r-card);
-  box-shadow:var(--card-shadow);
-}
-.doc,.paper{background:var(--card);}
-
-/* ---- §4 CTA button: always a full pill, never a rounded rect ---- */
-.btn{border-radius:var(--r-pill);height:38px;font-weight:600;border:1px solid transparent;}
-.btn-primary,.cta-btn{background:var(--cta-bg);color:var(--cta-text);border-color:transparent;}
-.btn-primary:hover,.cta-btn:hover{background:var(--cta-hover);}
-.btn-secondary,.btn-ghost{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink);}
+/* ---- §2 Primary action: brand fill always carries a brand-hued shadow ---- */
+.btn{border-radius:var(--r-btn);height:40px;font-weight:600;border:none;font-family:var(--sans);}
+.btn-primary,.cta-btn{background:var(--brand);color:#fff;box-shadow:var(--shadow-brand);}
+.btn-primary:hover,.cta-btn:hover{background:var(--brand-hover);box-shadow:0 12px 26px var(--brand-shadow);}
+.btn-primary:disabled{box-shadow:none;}
+.btn-secondary,.btn-ghost{background:var(--card);color:var(--navy);border:1px solid var(--border);box-shadow:none;}
 .btn-ghost:hover,.btn-secondary:hover{background:var(--sunken);}
-.btn-sm{height:32px;}
-.btn-xs{height:26px;}
+.btn-danger,.btn-danger-ghost{background:transparent;color:var(--bad);box-shadow:none;}
+.btn-danger:hover{background:var(--bad-soft);}
+.btn-sm{height:34px;}
+.btn-xs{height:28px;}
 
-/* ---- §3 Shell ---- */
-.side,.sidebar{background:var(--card);border-right:1px solid var(--border);}
-.topbar{background:transparent;border-bottom:1px solid var(--border);}
-.logo-mark,.brand-mark{background:var(--cta-bg);color:var(--cta-text);}
-
-/* Selected nav uses the same language as "click this" — solid ink in light,
-   the one gradient in dark. */
+/* ---- §5 Sidebar. Selection is a soft tint, never a solid fill (§3) ---- */
+.side,.sidebar{background:var(--card);border-right:1px solid var(--border);box-shadow:none;}
+.topbar{background:var(--card);border-bottom:1px solid var(--border);box-shadow:none;}
+.nav button,.nav-item{border-radius:var(--r-sm);color:var(--ink-2);font-weight:600;font-size:13.5px;}
+.nav button:hover,.nav-item:hover{background:var(--sunken);color:var(--navy);}
 .nav button.active,.nav-item.active{
-  background:var(--pill-sel-bg);color:var(--pill-sel-text);
-  border-left:none;padding-left:10px;border-radius:var(--r-sm);
+  background:var(--brand-soft);color:var(--brand);border-left:none;padding-left:10px;box-shadow:none;
 }
-.nav button.active .nav-icon,.nav-item.active .nav-icon{opacity:1;}
-.nav button.active .nav-count,.nav-item.active .nav-count{color:var(--pill-sel-text);}
-.nav button:hover,.nav-item:hover{background:var(--sunken);color:var(--ink);}
-.nav-badge{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);font-weight:700;}
-.nav-item.active .nav-badge{background:rgba(255,255,255,.22);border-color:transparent;color:var(--pill-sel-text);}
-.nav-group-label,.nav-section-label{color:var(--ink-3);}
+.nav button.active .nav-count,.nav-item.active .nav-count{color:var(--brand);}
+.nav-group-label,.nav-section-label{color:var(--ink-3);font-weight:600;}
+.nav-badge{background:var(--brand);color:#fff;font-weight:600;box-shadow:none;}
+.nav-item.active .nav-badge{background:var(--brand);color:#fff;}
+/* Decorative, not a state indicator — the one sidebar element allowed a fill. */
+.logo-mark,.brand-mark{background:var(--brand);color:#fff;box-shadow:var(--shadow-brand);border-radius:var(--r-sm);}
 
 .search-box,.cmdk-trigger{
-  background:var(--pill-bg);border:1px solid var(--pill-border);border-radius:var(--r-pill);
-  height:38px;padding:0 16px;color:var(--ink-3);
+  background:var(--sunken);border:none;border-radius:var(--r-pill);height:38px;padding:0 16px;color:var(--ink-3);
 }
-.search-box:hover,.cmdk-trigger:hover{background:var(--sunken);}
-.icon-btn{
-  background:var(--pill-bg);border:1px solid var(--pill-border);border-radius:50%;
-  width:36px;height:36px;color:var(--ink-2);
-}
-.icon-btn:hover{background:var(--sunken);color:var(--ink);}
-.avatar{background:var(--pill-sel-bg);color:var(--pill-sel-text);font-weight:700;}
-
-.credit-mini,.credit-card{background:var(--pill-bg);border:1px solid var(--pill-border);}
-.credit-mini-buy,.credit-cta{border:1px solid var(--pill-border);color:var(--ink-2);border-radius:var(--r-pill);}
-.credit-mini-buy:hover,.credit-cta:hover{background:var(--sunken);color:var(--ink);}
-.profile-chip,.user-chip{border:1px solid var(--pill-border);border-radius:var(--r-card);}
-.profile-chip .name,.user-chip .name{color:var(--ink);}
+.search-box:hover,.cmdk-trigger:hover{background:#E4ECFA;}
+.icon-btn{background:var(--sunken);border:none;border-radius:50%;width:36px;height:36px;color:var(--ink-2);}
+.icon-btn:hover{background:#E4ECFA;color:var(--navy);}
+.avatar{background:var(--brand);color:#fff;box-shadow:var(--shadow-brand);font-weight:600;}
+.credit-mini,.credit-card{background:var(--sunken);border:none;border-radius:var(--r-sm);}
+.credit-mini-buy,.credit-cta{border:1px solid var(--border);border-radius:var(--r-pill);color:var(--ink-2);background:var(--card);}
+.credit-mini-buy:hover,.credit-cta:hover{color:var(--brand);border-color:var(--brand);}
+.profile-chip,.user-chip{border:1px solid var(--border);border-radius:var(--r-sm);}
+.profile-chip .name,.user-chip .name{color:var(--navy);font-weight:600;}
 .profile-chip .role,.user-chip .email{color:var(--ink-3);}
 
-/* ---- §4 Pills / tags ---- */
-.pill,.stage-pill{
-  display:inline-flex;align-items:center;gap:5px;
-  background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);
-  font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:var(--r-pill);
+/* ---- §5 Hero / greeting card: the only place an illustration belongs ---- */
+.hero-card{
+  background:linear-gradient(135deg,#E8F1FF 0%,#FFFFFF 62%);
+  border-radius:var(--r-bigcard);padding:26px 28px;
+  box-shadow:0 14px 34px var(--brand-shadow);
+  display:flex;align-items:center;gap:22px;position:relative;overflow:hidden;
 }
-.pill.active-stage,.stage-pill.active-stage{
-  background:var(--verified-soft);border-color:transparent;color:var(--verified);
-}
-.badge{border-radius:var(--r-pill);font-weight:700;}
-.badge-neutral{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);}
-.badge-success,.badge-green{background:var(--verified-soft);color:var(--verified);}
-.badge-primary,.badge-violet{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink);}
+.hero-card-body{flex:1;min-width:0;}
+.hero-card-title{font-family:var(--display);font-size:22px;font-weight:700;color:var(--navy);}
+.hero-card-sub{font-size:13px;color:var(--ink-2);margin:6px 0 16px;max-width:46ch;}
+.hero-glyph{font-size:60px;line-height:1;flex:none;opacity:.9;}
 
-/* Verification signal — never reused as generic "good" decoration (§6). */
-.verified-check{color:var(--verified);font-size:12px;}
+/* ---- §5 Mini stat card: solid fill + matching shadow, max 2 per screen ---- */
+.mini-stat{border-radius:var(--r-sm);padding:18px 20px;color:#fff;}
+.mini-stat.brand{background:var(--brand);box-shadow:0 12px 26px var(--brand-shadow);}
+.mini-stat.navy{background:var(--navy);box-shadow:0 12px 26px var(--navy-shadow);}
+.mini-stat .num{font-family:var(--display);font-size:24px;font-weight:700;line-height:1.1;}
+.mini-stat .lbl{font-size:11.5px;opacity:.82;margin-top:4px;}
 
-/* ---- §4 Match ring. In dark the stroke references the SVG gradient def;
-   CSS cannot gradient a stroke, so ResumePreview/AgentView emit
-   <linearGradient id="gradRing"> once and every ring points at it. ---- */
-.match-ring{position:relative;display:inline-flex;flex:none;}
-.match-ring svg{transform:rotate(-90deg);display:block;}
-.match-ring .ring-track{stroke:var(--border);fill:none;}
-.match-ring .ring-prog{stroke:var(--ink);fill:none;stroke-linecap:round;transition:stroke-dasharray .5s;}
-html[data-theme="dark"] .match-ring .ring-prog{stroke:url(#gradRing);}
-.match-ring .ring-num{
-  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:12.5px;font-weight:800;color:var(--ink);
+/* ---- §5 Selectable chip: selection is border + soft shadow, not a fill ---- */
+.sel-chip{
+  background:var(--bg);border:2px solid transparent;border-radius:var(--r-sm);
+  padding:12px 14px;cursor:pointer;transition:.14s;box-shadow:none;color:var(--ink-2);
 }
+.sel-chip:hover{background:var(--sunken);}
+.sel-chip.selected{background:var(--card);border-color:var(--brand);box-shadow:0 8px 20px var(--brand-shadow);color:var(--navy);}
 
-/* ---- §4 Pipeline row ---- */
-.pipe-row{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border);}
-.pipe-row:last-child{border-bottom:none;}
-.pipe-body{flex:1;min-width:0;}
-.pipe-name{font-size:13.5px;font-weight:700;color:var(--ink);}
-.pipe-meta{font-size:12px;color:var(--ink-2);margin-top:2px;}
+/* ---- §5 Bar chart: flat colour + its own matching shadow ---- */
+.v4-bars{display:flex;align-items:flex-end;gap:12px;height:170px;}
+.v4-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end;}
+.v4-bar{width:100%;border-radius:10px 10px 0 0;}
+.v4-bar.brand{background:var(--brand);box-shadow:0 8px 18px var(--brand-shadow);}
+.v4-bar.sky{background:var(--a-sky);box-shadow:0 8px 18px var(--a-sky-shadow);}
+.v4-bar.mid{background:var(--a-mid);box-shadow:0 8px 18px var(--a-mid-shadow);}
+.v4-bar.cyan{background:var(--a-cyan);box-shadow:0 8px 18px var(--a-cyan-shadow);}
+.v4-bar-label{font-size:11.5px;color:var(--ink-3);font-weight:500;}
 
-/* ---- §4 Job / opportunity card ---- */
-.job-card{
-  background:var(--card);border:1px solid var(--border);border-radius:var(--r-card);
-  box-shadow:var(--card-shadow);padding:18px;display:flex;flex-direction:column;gap:10px;
-}
-.job-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
-.logo-chip{
-  width:34px;height:34px;border-radius:10px;flex:none;
-  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;
-}
-.job-company{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:var(--ink);}
-.job-role{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
-.job-meta{font-size:12px;color:var(--ink-2);}
-.job-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;}
-.job-match{font-size:12px;color:var(--ink-3);font-weight:600;}
-/* Rhythm only — roughly 1 in 4, never a status signal (§6). */
-.job-card.invert{background:var(--ink);border-color:var(--ink);}
-.job-card.invert .job-role,.job-card.invert .job-company{color:var(--bg-solid);}
-.job-card.invert .job-meta,.job-card.invert .job-match{color:var(--bg-solid);opacity:.7;}
-.job-card.invert .cta-btn,.job-card.invert .btn-primary{background:var(--bg-solid);color:var(--ink);}
+/* ---- §5 Progress bar: shadow sits under the fill only, not the track ---- */
+.progress-bar,.bar-track{background:#EDF2FC;border-radius:var(--r-pill);overflow:visible;box-shadow:none;}
+.progress-fill,.bar-fill{background:var(--brand);border-radius:var(--r-pill);box-shadow:0 3px 8px var(--brand-shadow);}
+.progress-fill.green{background:var(--ok);box-shadow:0 3px 8px var(--ok-shadow);}
 
-/* ---- §4 Empty / drop state: dashed box, no texture inside ---- */
-.dropzone,.empty-drop{
-  border:1.5px dashed var(--pill-border);border-radius:var(--r-card);
-  background:transparent;color:var(--ink-3);
-}
-.dropzone:hover,.dropzone.drag{border-color:var(--ink-3);background:var(--sunken);}
+/* ---- Pills / badges ---- */
+.badge{border-radius:var(--r-pill);font-weight:600;box-shadow:none;}
+.badge-neutral{background:var(--sunken);color:var(--ink-2);border:none;}
+.badge-success,.badge-green{background:var(--ok-soft);color:var(--ok);}
+.badge-warning,.badge-amber{background:var(--warn-soft);color:var(--warn);}
+.badge-danger,.badge-red{background:var(--bad-soft);color:var(--bad);}
+.badge-primary,.badge-violet{background:var(--brand-soft);color:var(--brand);}
+.chip{background:var(--sunken);border:none;color:var(--ink-2);border-radius:var(--r-pill);}
+.kw-chip{background:var(--brand-soft);border:none;color:var(--brand);}
 
 /* ---- Inputs ---- */
 input[type=text],input[type=email],input[type=password],input[type=number],textarea,select{
-  background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink);border-radius:var(--r-input);
+  background:var(--card);border:1px solid var(--border);color:var(--navy);border-radius:var(--r-input);
 }
+input:focus,textarea:focus,select:focus{border-color:var(--brand);outline:none;}
 input::placeholder,textarea::placeholder{color:var(--ink-3);}
-:focus-visible{outline:2px solid var(--ink-2);outline-offset:2px;}
-::selection{background:var(--sunken);}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;}
+::selection{background:var(--brand-soft);}
+.dropzone,.empty-drop{border:1.5px dashed var(--border-strong);background:var(--bg);color:var(--ink-3);border-radius:var(--r-sm);}
+.dropzone:hover,.dropzone.drag{border-color:var(--brand);background:var(--brand-soft);}
 
 /* ---- Tables ---- */
-table thead th{background:transparent;color:var(--ink-3);font-weight:700;}
+table{border:none;box-shadow:var(--shadow-card);border-radius:var(--r-card);overflow:hidden;}
+table thead th{background:var(--sunken);color:var(--ink-3);font-weight:600;}
 table tbody tr{border-top:1px solid var(--border);}
 
-/* ---- Workspace surfaces inherit the card treatment ---- */
-.opt-footer{background:transparent;border-top:1px solid var(--border);}
+/* ---- Workspace surfaces ---- */
+.seg-ctrl{border:1px solid var(--border);border-radius:var(--r-pill);overflow:hidden;}
+.seg-ctrl button.active,.mode-btn.active{background:var(--brand);color:#fff;}
+.start-tile{background:var(--bg);border:2px solid transparent;border-radius:var(--r-sm);box-shadow:none;}
+.start-tile:hover{background:var(--sunken);}
+.start-tile.selected{background:var(--card);border-color:var(--brand);box-shadow:0 8px 20px var(--brand-shadow);}
+.start-tile.selected .start-tile-title{color:var(--navy);}
+.start-tile.selected .start-tile-desc{color:var(--ink-2);}
+.radio-card,.domain-row{border-radius:var(--r-sm);}
+.radio-card.selected,.domain-row.selected{background:var(--brand-soft);border-color:var(--brand);}
 .result-tabs{background:transparent;border-bottom:1px solid var(--border);}
-.result-tab.active{color:var(--ink);border-bottom-color:var(--ink);}
-.ws-col-num{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);}
-.seg-ctrl{border:1px solid var(--pill-border);border-radius:var(--r-pill);overflow:hidden;}
-.seg-ctrl button.active,.mode-btn.active{background:var(--pill-sel-bg);color:var(--pill-sel-text);}
-.start-tile{border:1px solid var(--pill-border);background:var(--pill-bg);border-radius:var(--r-sm);}
-.start-tile.selected{border-color:transparent;background:var(--pill-sel-bg);}
-.start-tile.selected .start-tile-title{color:var(--pill-sel-text);}
-.start-tile.selected .start-tile-desc{color:var(--pill-sel-text);opacity:.75;}
-.radio-card.selected,.domain-row.selected{background:var(--sunken);border-color:var(--ink-3);}
-.kw-chip{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink);}
-.chip{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);border-radius:var(--r-pill);}
-.progress-fill{background:var(--cta-bg);}
-.progress-bar{background:var(--sunken);}
-.hl-term{background:var(--verified-soft);color:var(--verified);}
+.result-tab.active{color:var(--brand);border-bottom-color:var(--brand);}
+.ws-col-num{background:var(--brand-soft);border:none;color:var(--brand);}
+.opt-footer{background:var(--bg);border-top:1px solid var(--border);}
+.opt-block-head:hover{background:var(--sunken);}
+.hl-term{background:var(--brand-soft);color:var(--brand);}
+.match-ring .ring-track{stroke:var(--track);}
+.match-ring .ring-prog{stroke:var(--brand);}
+.match-ring .ring-num{color:var(--navy);}
 
-/* ---- §6 Superseded devices from v1/v2 are neutralised, not blended ---- */
+/* ---- §6 Superseded devices are neutralised, not blended ---- */
 .hatch-grey,.hatch-olive{background-image:none;background-color:transparent;}
-.pastel-card{background:var(--card);border:1px solid var(--border);}
+.pastel-card{background:var(--card);border:none;box-shadow:var(--shadow-card);}
 .dot-grid{background-image:none;}
-.build-cat .cat-body,.build-cat .cat-head,.build-cat .cat-tail{fill:var(--ink-2);stroke:var(--ink-2);}
+.build-cat .cat-body,.build-cat .cat-head{fill:var(--brand);}
+.build-cat .cat-tail{stroke:var(--brand);}
+.build-cat .cat-paw,.build-cat .cat-sparks circle{fill:var(--a-sky);}

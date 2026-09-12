@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { getTheme, toggleTheme } from '../lib/theme.js';
 
 const NAV_ICON = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>;
 
@@ -9,7 +8,6 @@ export default function CommandPalette({ setView }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
-  const [theme, setThemeState] = useState(getTheme);
   const inputRef = useRef(null);
 
   const commands = [
@@ -19,7 +17,6 @@ export default function CommandPalette({ setView }) {
     { id: 'resumes', label: 'Go to Resumes', group: 'Navigate', run: () => setView('resumes') },
     { id: 'billing', label: 'Go to Billing', group: 'Navigate', run: () => setView('billing') },
     { id: 'settings', label: 'Go to Settings', group: 'Navigate', run: () => setView('settings') },
-    { id: 'theme', label: theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode', group: 'Actions', run: () => setThemeState(toggleTheme()) },
     { id: 'signout', label: 'Sign out', group: 'Actions', run: logout }
   ];
 

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import Logo from './Logo.jsx';
-import { getTheme, toggleTheme } from '../lib/theme.js';
 
 const GOOGLE_G = (
   <svg width="16" height="16" viewBox="0 0 48 48">
@@ -21,7 +20,6 @@ export default function Login() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [theme, setThemeState] = useState(getTheme);
 
   function switchMode(next) {
     setMode(next); setError(null); setSuccess(null);
@@ -68,12 +66,6 @@ export default function Login() {
 
   return (
     <div className="login-shell">
-      <button className="icon-btn" style={{ position: 'absolute', top: 20, right: 20 }}
-        onClick={() => setThemeState(toggleTheme())} title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
-        {theme === 'light'
-          ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
-          : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="4.5" /><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8L6 18M18 6l1.8-1.8" /></svg>}
-      </button>
       <div className="login-card">
         <Logo size={44} />
         <h1 style={{ textAlign: 'center', fontSize: 22, margin: '14px 0 6px' }}>{heading}</h1>
