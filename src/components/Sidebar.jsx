@@ -14,6 +14,7 @@ const ACCOUNT_NAV = [
   { key: 'settings', icon: '⚙', label: 'Settings' },
 ];
 const ADMIN_NAV = [
+  { key: 'domainlibrary', icon: '▤', label: 'Domain Library', badge: 'NEW' },
   { key: 'admin', icon: '🛡', label: 'Admin Console', badge: 'ADMIN', adminBadge: true },
 ];
 

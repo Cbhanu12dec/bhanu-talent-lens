@@ -11,6 +11,7 @@ import AIPreferencesView from './components/AIPreferencesView.jsx';
 import ComingSoonView from './components/ComingSoonView.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import AdminView from './components/AdminView.jsx';
+import DomainLibraryView from './components/DomainLibraryView.jsx';
 import CareerProfileView from './components/CareerProfileView.jsx';
 import AgentView from './components/AgentView.jsx';
 import InsightsView from './components/InsightsView.jsx';
@@ -21,7 +22,7 @@ import { ensureAccount } from './lib/billing.js';
 const ADMIN_EMAIL = 'cbhanu12dec@gmail.com';
 // Views that require admin. The real boundary is server-side `requireAdmin`;
 // this only keeps the UI from offering something the API would reject.
-const ADMIN_VIEWS = new Set(['admin']);
+const ADMIN_VIEWS = new Set(['admin', 'domainlibrary']);
 
 function getCheckoutStatusFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -170,6 +171,11 @@ function Workspace() {
           {isAdmin && (
             <Keep active={view === 'admin'}>
               <AdminView notify={notify} />
+            </Keep>
+          )}
+          {isAdmin && (
+            <Keep active={view === 'domainlibrary'}>
+              <DomainLibraryView notify={notify} />
             </Keep>
           )}
           <Keep active={view === 'careerprofile'}>
