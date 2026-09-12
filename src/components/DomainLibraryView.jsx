@@ -328,12 +328,15 @@ export default function DomainLibraryView({ notify }) {
 
               <section className="dl-card">
                 <div className="dl-card-head"><h3>Visibility</h3></div>
-                <label className="dl-switch-row">
-                  <span className={`dl-switch${domain.status === 'published' ? ' on' : ''}`} onClick={handleVisibilityToggle}>
+                <div className="dl-switch-row">
+                  <button type="button" role="switch" aria-checked={domain.status === 'published'}
+                    aria-label="Publish domain"
+                    className={`dl-switch${domain.status === 'published' ? ' on' : ''}`}
+                    onClick={handleVisibilityToggle}>
                     <span className="dl-switch-knob" />
-                  </span>
+                  </button>
                   <span className="dl-sm">{domain.status === 'published' ? 'Published — live for tailoring' : 'Draft — internal only'}</span>
-                </label>
+                </div>
               </section>
 
               <section className="dl-card">

@@ -102,43 +102,80 @@ const BUILD_STAGES = {
   existing: ['Reading your base resume…', 'Analyzing the job description…', 'Rewriting against the JD…', 'Optimizing for ATS…'],
 };
 
-// Cute progress mascot — a cat typing away while the resume builds. Purely
-// decorative, so it carries aria-hidden and the real status stays in the log.
+// Cute progress mascot — a cat typing at a laptop while the resume builds.
+// Purely decorative, so it carries aria-hidden and the real status stays in the log.
 function BuildCat({ done = false }) {
   return (
-    <svg className={`build-cat${done ? ' done' : ''}`} viewBox="0 0 120 100" width="150" height="125" aria-hidden="true">
-      <ellipse className="cat-shadow" cx="60" cy="90" rx="30" ry="4.5" />
-      {/* desk */}
-      <rect x="18" y="74" width="84" height="6" rx="3" fill="var(--border-strong)" />
-      {/* tail */}
-      <path className="cat-tail" d="M82 70 q16 2 14 -12" stroke="var(--brand)" strokeWidth="5" strokeLinecap="round" fill="none" />
-      {/* body */}
-      <path className="cat-body" d="M34 74 q0 -22 26 -22 q26 0 26 22 z" fill="var(--brand)" />
-      {/* head */}
-      <g className="cat-head">
-        <path d="M40 40 l2 -13 l11 7 z" fill="var(--brand)" />
-        <path d="M80 40 l-2 -13 l-11 7 z" fill="var(--brand)" />
-        <ellipse cx="60" cy="44" rx="22" ry="18" fill="var(--brand)" />
-        <ellipse cx="60" cy="50" rx="10" ry="7" fill="var(--brand-soft)" />
-        {/* eyes */}
-        <g className="cat-eyes">
-          <ellipse cx="52" cy="42" rx="2.6" ry="3.2" fill="#fff" />
-          <ellipse cx="68" cy="42" rx="2.6" ry="3.2" fill="#fff" />
-        </g>
-        {/* nose + smile */}
-        <path d="M60 47 l-2.5 2 h5 z" fill="#fff" />
-        <path d="M56 52 q4 3 8 0" stroke="#fff" strokeWidth="1.4" fill="none" strokeLinecap="round" />
-        {/* whiskers */}
-        <path d="M38 46 h9 M38 51 h9 M82 46 h-9 M82 51 h-9" stroke="var(--brand-soft)" strokeWidth="1.2" strokeLinecap="round" />
+    <svg className={`build-cat${done ? ' done' : ''}`} viewBox="0 0 170 132" width="196" height="152" aria-hidden="true">
+      <ellipse className="cat-glow" cx="85" cy="110" rx="48" ry="6" />
+      <rect x="12" y="104" width="146" height="5" rx="2.5" fill="var(--border-strong)" />
+
+      {/* coffee, because this is clearly a long build */}
+      <g className="cat-steam">
+        <path d="M24 86 q4 -5 0 -10 q-4 -5 0 -10" />
+        <path d="M31 88 q4 -6 0 -11 q-4 -6 0 -11" />
       </g>
-      {/* paws tapping the desk */}
-      <ellipse className="cat-paw left" cx="46" cy="72" rx="6" ry="4.5" fill="var(--brand-soft)" />
-      <ellipse className="cat-paw right" cx="74" cy="72" rx="6" ry="4.5" fill="var(--brand-soft)" />
-      {/* little sparks of progress */}
-      <g className="cat-sparks">
-        <circle cx="96" cy="30" r="2.5" fill="var(--brand)" />
-        <circle cx="104" cy="20" r="1.8" fill="var(--brand)" />
-        <circle cx="92" cy="16" r="1.4" fill="var(--brand)" />
+      <rect x="17" y="89" width="19" height="15" rx="3.5" fill="var(--brand-soft)" stroke="var(--brand)" strokeWidth="2" />
+      <path d="M36 93 q7 0 7 4.5 q0 4.5 -7 4.5" stroke="var(--brand)" strokeWidth="2" fill="none" />
+
+      <path className="cat-tail" d="M108 94 q26 4 22 -22" stroke="var(--brand)" strokeWidth="6" strokeLinecap="round" fill="none" />
+
+      {/* body is wider than the laptop so the shoulders stay visible */}
+      <g className="cat-body">
+        <ellipse cx="85" cy="78" rx="37" ry="26" fill="var(--brand)" />
+      </g>
+
+      {/* laptop, drawn over the body so the cat sits behind it */}
+      <rect x="55" y="50" width="60" height="42" rx="5" fill="var(--border-strong)" />
+      <rect x="58.5" y="53.5" width="53" height="35" rx="3" fill="#fff" />
+      {done ? (
+        <path className="cat-check" d="M72 71 l8 8 l18 -18" stroke="var(--good)" strokeWidth="4.5"
+          fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      ) : (
+        <g className="cat-lines">
+          <rect className="cat-line" x="63" y="60" width="44" height="4" rx="2" fill="var(--brand)" />
+          <rect className="cat-line" x="63" y="69" width="44" height="4" rx="2" fill="var(--brand)" />
+          <rect className="cat-line" x="63" y="78" width="30" height="4" rx="2" fill="var(--brand)" />
+        </g>
+      )}
+      <path d="M47 92 h76 l10 11 h-96 z" fill="var(--border-strong)" />
+      <rect x="72" y="96" width="26" height="3" rx="1.5" fill="#fff" opacity=".7" />
+
+      {/* head sits above the screen, so it stays readable at small sizes */}
+      <g className="cat-head">
+        <g className="cat-ear l">
+          <path d="M65 28 L68 7 L82 21 Z" fill="var(--brand)" />
+          <path d="M69 24 L70.5 13 L78 20 Z" fill="#fff" opacity=".28" />
+        </g>
+        <g className="cat-ear r">
+          <path d="M105 28 L102 7 L88 21 Z" fill="var(--brand)" />
+          <path d="M101 24 L99.5 13 L92 20 Z" fill="#fff" opacity=".28" />
+        </g>
+        <ellipse cx="85" cy="36" rx="21" ry="17.5" fill="var(--brand)" />
+        <ellipse cx="85" cy="43" rx="10" ry="6.5" fill="#fff" opacity=".18" />
+        {done ? (
+          <g className="cat-eyes" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+            <path d="M73 35 q4 -4.5 8 0" />
+            <path d="M89 35 q4 -4.5 8 0" />
+          </g>
+        ) : (
+          <g className="cat-eyes">
+            <ellipse cx="77" cy="34" rx="2.9" ry="3.5" fill="#fff" />
+            <ellipse cx="93" cy="34" rx="2.9" ry="3.5" fill="#fff" />
+          </g>
+        )}
+        <path d="M85 40 l-2.6 2.2 h5.2 z" fill="#fff" />
+        <path d="M80.5 45 q4.5 3.2 9 0" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <path d="M56 38 h13 M57 44 h12 M114 38 h-13 M113 44 h-12" stroke="#fff" opacity=".5" strokeWidth="1.4" strokeLinecap="round" />
+      </g>
+
+      <ellipse className="cat-paw l" cx="66" cy="96" rx="7" ry="5" fill="var(--brand)" />
+      <ellipse className="cat-paw r" cx="104" cy="96" rx="7" ry="5" fill="var(--brand)" />
+
+      <g className="cat-sparks" fill="var(--brand)">
+        <path className="cat-spark" d="M136 30 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 l5 -2 z" />
+        <path className="cat-spark" d="M150 16 l1.6 4 l4 1.6 l-4 1.6 l-1.6 4 l-1.6 -4 l-4 -1.6 l4 -1.6 z" />
+        <path className="cat-spark" d="M127 12 l1.3 3.2 l3.2 1.3 l-3.2 1.3 l-1.3 3.2 l-1.3 -3.2 l-3.2 -1.3 l3.2 -1.3 z" />
       </g>
     </svg>
   );
