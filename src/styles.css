@@ -1250,9 +1250,15 @@ h1.page-title{font-size:24px;font-weight:700;color:var(--navy);letter-spacing:-.
 .field-hint{font-size:11.5px;color:var(--ink-3);}
 
 /* ---- §5 Card: shadow does the separating, no border (§6) ---- */
-.card,.panel,.big-card,.result-shell,.opt-block,.status-card,.resume-card,.job-card{
+.card,.panel,.big-card,.result-shell,.status-card,.resume-card,.job-card{
   background:var(--card);border:none;border-radius:var(--r-card);
   box-shadow:var(--shadow-card);
+}
+/* Stacked lists of small blocks need a lighter shadow — the full card shadow
+   pools between them and reads as smudge rather than separation. */
+.opt-block{
+  background:var(--card);border:none;border-radius:var(--r-card);
+  box-shadow:0 2px 6px rgba(25,59,104,.06);
 }
 .doc,.paper{background:var(--card);border:none;box-shadow:var(--shadow-card);}
 

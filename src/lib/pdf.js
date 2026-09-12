@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { splitContact } from './contactLinks.js';
 
 const NAVY = [0, 0, 0];          // headings / name — solid black per user preference, no color accents
 const TEXT = [0, 0, 0];          // body text
@@ -33,11 +34,22 @@ export function buildResumePdf(resume, title = 'Resume') {
   doc.text(resume.name || '', pageWidth / 2, y, { align: 'center' });
   y += 22;
 
-  // Contact line
+  // Contact line — each part is drawn individually so recognised emails,
+  // phone numbers and profile URLs can carry a real clickable link annotation.
   if (resume.contact) {
-    const parts = resume.contact.split('|').map(s => s.trim()).filter(Boolean);
+    const parts = splitContact(resume.contact);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...MUTED);
-    doc.text(parts.join('   •   '), pageWidth / 2, y, { align: 'center' });
+    const sep = '   •   ';
+    const sepW = doc.getTextWidth(sep);
+    const totalW = parts.reduce((w, p, i) => w + doc.getTextWidth(p.text) + (i ? sepW : 0), 0);
+    let x = (pageWidth - totalW) / 2;
+    parts.forEach((p, i) => {
+      if (i) { doc.text(sep, x, y); x += sepW; }
+      const w = doc.getTextWidth(p.text);
+      doc.text(p.text, x, y);
+      if (p.href) doc.link(x, y - 8, w, 11, { url: p.href });
+      x += w;
+    });
     y += 20;
   } else {
     y += 6;

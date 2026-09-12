@@ -1,4 +1,5 @@
 import React from 'react';
+import { splitContact } from '../lib/contactLinks.js';
 
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -27,13 +28,24 @@ function ParagraphLine({ text, terms }) {
 
 export default function ResumePreview({ resume, showHighlights = true }) {
   if (!resume) return null;
-  const contactParts = (resume.contact || '').split('|').map(s => s.trim()).filter(Boolean);
+  const contactParts = splitContact(resume.contact);
   const terms = showHighlights ? (resume.highlights || []) : [];
 
   return (
     <div>
       <h4>{resume.name}</h4>
-      {contactParts.length > 0 && <div className="contact-line">{contactParts.join('   •   ')}</div>}
+      {contactParts.length > 0 && (
+        <div className="contact-line">
+          {contactParts.map((p, i) => (
+            <React.Fragment key={i}>
+              {i > 0 && '   •   '}
+              {p.href
+                ? <a href={p.href} target="_blank" rel="noopener noreferrer">{p.text}</a>
+                : p.text}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
       {(resume.sections || []).map((section, i) => (
         <div key={i}>
           <div className="sect">{section.heading}</div>

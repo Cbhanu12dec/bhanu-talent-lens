@@ -1,7 +1,8 @@
 import {
   Document, Packer, Paragraph, TextRun, AlignmentType,
-  BorderStyle, TabStopType
+  BorderStyle, TabStopType, ExternalHyperlink
 } from 'docx';
+import { splitContact } from './contactLinks.js';
 
 const NAVY = '000000';
 const MUTED = '000000';
@@ -76,12 +77,20 @@ export async function buildResumeDocx(resume, title = 'Resume') {
   }));
 
   if (resume.contact) {
-    const parts = resume.contact.split('|').map(s => s.trim()).filter(Boolean);
-    children.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 220 },
-      children: [new TextRun({ text: parts.join('   •   '), color: MUTED, size: 19 })]
-    }));
+    const parts = splitContact(resume.contact);
+    const runs = [];
+    parts.forEach((p, i) => {
+      if (i) runs.push(new TextRun({ text: '   \u2022   ', color: MUTED, size: 19 }));
+      if (p.href) {
+        runs.push(new ExternalHyperlink({
+          link: p.href,
+          children: [new TextRun({ text: p.text, size: 19, style: 'Hyperlink' })],
+        }));
+      } else {
+        runs.push(new TextRun({ text: p.text, color: MUTED, size: 19 }));
+      }
+    });
+    children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 220 }, children: runs }));
   }
 
   (resume.sections || []).forEach(section => {

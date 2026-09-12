@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import mammoth from 'mammoth';
+import { extractPdfText } from '../lib/pdfText.js';
 import {
   saveResume, deleteResume, uploadResumeFile, updateResumeText,
   updateResumePrompts, updateResumeAtsTarget
@@ -46,6 +47,14 @@ export default function ResumeLibraryView({ uid, state, setView, notify }) {
         const result = await mammoth.extractRawText({ arrayBuffer });
         setDraftText(result.value.trim());
         setStatus({ kind: 'ok', msg: 'Text extracted from .docx' });
+      } else if (ext === 'pdf') {
+        const text = await extractPdfText(file);
+        if (!text.trim()) {
+          setStatus({ kind: 'warn', msg: 'This PDF has no selectable text (likely a scan) — switch to Paste text below.' });
+        } else {
+          setDraftText(text);
+          setStatus({ kind: 'ok', msg: 'Text extracted from .pdf' });
+        }
       } else if (ext === 'txt' || ext === 'md') {
         const text = await file.text();
         setDraftText(text.trim());
@@ -152,7 +161,7 @@ export default function ResumeLibraryView({ uid, state, setView, notify }) {
                 onDrop={onDrop}>
                 <div className="dropzone-icon">⇪</div>
                 <div className="dropzone-text">Drag your resume here, or <span className="link">browse files</span></div>
-                <div className="dropzone-sub">.docx and .txt/.md are read automatically · other formats saved as-is</div>
+                <div className="dropzone-sub">.pdf, .docx and .txt/.md are read automatically · other formats saved as-is</div>
               </div>
               <input ref={fileInputRef} type="file" accept=".docx,.txt,.md,.pdf" style={{ display: 'none' }}
                 onChange={e => e.target.files.length && handleFile(e.target.files[0])} />
