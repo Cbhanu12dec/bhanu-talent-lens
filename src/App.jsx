@@ -113,6 +113,16 @@ function Workspace() {
 
   return (
     <div className="shell">
+      {/* CSS can't gradient an SVG stroke, so every match ring references this def. */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+        <defs>
+          <linearGradient id="gradRing" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#3F6EFF" />
+            <stop offset="55%" stopColor="#9C5CFF" />
+            <stop offset="100%" stopColor="#FF5AB4" />
+          </linearGradient>
+        </defs>
+      </svg>
       <CommandPalette setView={setView} />
       <Sidebar view={view} setView={setView} resumeCount={resumes.length} credits={credits} creditsMax={creditsTotal} />
       <div className="main-col">

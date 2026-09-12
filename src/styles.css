@@ -1,117 +1,150 @@
 /* ============================================================
-   RESUMECRAFT PRO — Design System v2 (Olive + Hatch)
-   Supersedes the Sage + Pastel direction.
+   RESUMECRAFT PRO — Design System v3 (Dual theme)
+   One layout, two moods. Colors are re-declared per theme on the
+   html element; components only ever reference the variables, so
+   the same markup renders in both with no component branching.
+   Supersedes v2 (Olive + Hatch) and v1 (Sage + Pastel).
    ============================================================ */
+
+/* ---- LIGHT: "Talentry" — monochrome, black CTAs, colour only in
+   logos and the single verified check ---- */
+html[data-theme="light"]{
+  --bg-wash: radial-gradient(circle at 12% 8%, rgba(120,160,255,.18), transparent 40%),
+             radial-gradient(circle at 88% 82%, rgba(255,140,190,.16), transparent 42%),
+             #F6F7FA;
+  --bg-solid:#F6F7FA;
+  --card:#FFFFFF;
+  --border:#E7E8EC;
+  --ink:#101114;
+  --ink-2:#6B6E76;
+  --ink-3:#A2A4AC;
+  --cta-bg:#101114;
+  --cta-text:#FFFFFF;
+  --cta-hover:#000000;
+  --pill-sel-bg:#101114;
+  --pill-sel-text:#FFFFFF;
+  --pill-bg:#FFFFFF;
+  --pill-border:#E7E8EC;
+  --verified:#22B573;
+  --verified-soft:#E6F8EF;
+  --card-shadow: 0 1px 2px rgba(20,20,30,.04), 0 10px 26px rgba(20,20,30,.05);
+  --sunken:#F2F3F6;
+  --danger:#D0402B;
+  --danger-soft:#FCEAE6;
+  --warn:#9A6B12;
+  --warn-soft:#FBF1DC;
+}
+
+/* ---- DARK: "Midnight AI" — navy canvas, exactly one gradient,
+   reserved for score / AI / action moments ---- */
+html[data-theme="dark"]{
+  --bg-wash:
+    radial-gradient(circle at 15% 15%, rgba(63,110,255,.20), transparent 40%),
+    radial-gradient(circle at 85% 20%, rgba(150,90,255,.16), transparent 45%),
+    radial-gradient(circle at 60% 90%, rgba(255,90,180,.10), transparent 40%),
+    #0A0D16;
+  --bg-solid:#0A0D16;
+  --card:#121729;
+  --border:rgba(255,255,255,.08);
+  --ink:#EDEFF7;
+  --ink-2:#9BA1B5;
+  --ink-3:#6E7488;
+  --cta-bg:linear-gradient(120deg,#3F6EFF 0%,#9C5CFF 55%,#FF5AB4 100%);
+  --cta-text:#FFFFFF;
+  --cta-hover:linear-gradient(120deg,#3560E0 0%,#8A4CE8 55%,#E84EA0 100%);
+  --pill-sel-bg:linear-gradient(120deg,#3F6EFF,#9C5CFF);
+  --pill-sel-text:#FFFFFF;
+  --pill-bg:rgba(255,255,255,.04);
+  --pill-border:rgba(255,255,255,.10);
+  --verified:#3FE0A5;
+  --verified-soft:rgba(63,224,165,.12);
+  --card-shadow: 0 0 0 1px rgba(255,255,255,.03), 0 20px 50px rgba(0,0,0,.5);
+  --sunken:rgba(255,255,255,.04);
+  --danger:#FF7A66;
+  --danger-soft:rgba(255,122,102,.12);
+  --warn:#E0B65C;
+  --warn-soft:rgba(224,182,92,.12);
+}
+
 :root{
-  /* ---- page / frame ---- */
-  --page-bg:#EEEEF2;
-  --frame:#FFFFFF;
-  --card-border:#ECECEF;
+  /* Non-colour primitives are theme-independent. */
+  --r-sm:8px; --r-btn:999px; --r-input:10px; --r-card:14px; --r-bigcard:16px; --r-pill:999px;
+  --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --display:var(--sans);
+  --mono:'JetBrains Mono','IBM Plex Mono',monospace;
+  --sidebar-w:240px;
+  --topbar-h:64px;
 
-  /* ---- text ---- */
-  --ink:#171816;
-  --ink-2:#6F726C;
-  --ink-3:#A6A8A2;
-
-  /* ---- brand: olive ---- */
-  --olive:#54702F;
-  --olive-dark:#3E5322;
-  --olive-soft:#EEF3E4;
-  --olive-pill-bg:#E4EEDA;
-
-  /* ---- semantic deltas: only for real comparisons ---- */
-  --pos-bg:#E4F1DC; --pos-text:#3F7A2E;
-  --neg-bg:#FBE4DD; --neg-text:#C0492E;
-
-  /* ---- chart / progress neutrals ---- */
-  --track:#EDEDF0;
-  --hatch-grey:#DCDDE0;
-
-  /* The only shadow in the product — see §7. */
-  --shadow-frame:0 1px 2px rgba(20,20,20,.03), 0 20px 50px rgba(20,20,20,.05);
-
-  --r-sm:6px; --r-btn:8px; --r-input:10px; --r-card:14px; --r-bigcard:18px; --r-frame:22px; --r-pill:999px;
-
-  /* ---- component-facing names mapped onto the tokens above ---- */
-  --canvas:var(--page-bg);
-  --bg:var(--page-bg);
-  --surface:var(--frame);
-  --surface-sunken:#F4F4F6;
+  /* Component-facing names mapped onto the theme tokens above. Declared
+     once here; they resolve against whichever theme block is active. */
+  --bg:var(--bg-solid);
+  --canvas:var(--bg-solid);
+  --surface:var(--card);
+  --surface-sunken:var(--sunken);
+  --surface-2:var(--sunken);
+  --surface-hover:var(--sunken);
+  --paper:var(--card);
   --text:var(--ink);
   --text-2:var(--ink-2);
   --text-3:var(--ink-3);
   --text-secondary:var(--ink-2);
   --text-muted:var(--ink-3);
-  --border:var(--card-border);
-  --border-strong:#DEDEE3;
-  --brand:var(--olive);
-  --brand-hover:var(--olive-dark);
-  --brand-soft:var(--olive-soft);
-  --primary:var(--olive);
-  --primary-hover:var(--olive-dark);
-  --primary-subtle:var(--olive-soft);
-  --good:var(--pos-text);
-  --good-soft:var(--pos-bg);
-  --bad:var(--neg-text);
-  --bad-soft:var(--neg-bg);
-  --warn:#8A6A1F;
-  --warn-soft:#FBF0D6;
-  --success:var(--pos-text);
-  --success-subtle:var(--pos-bg);
+  --border-strong:var(--pill-border);
+  --primary:var(--ink);
+  --primary-hover:var(--cta-hover);
+  --primary-subtle:var(--sunken);
+  --brand:var(--ink);
+  --brand-hover:var(--cta-hover);
+  --brand-soft:var(--sunken);
+  --brand-dark:var(--ink);
+  --success:var(--verified);
+  --success-subtle:var(--verified-soft);
+  --good:var(--verified);
+  --good-soft:var(--verified-soft);
+  --bad:var(--danger);
+  --bad-soft:var(--danger-soft);
+  --danger-subtle:var(--danger-soft);
   --warning:var(--warn);
   --warning-subtle:var(--warn-soft);
-  --danger:var(--neg-text);
-  --danger-subtle:var(--neg-bg);
-  --admin:#8A6A1F;
+  --admin:var(--warn);
   --admin-subtle:var(--warn-soft);
-  --sidebar:var(--frame);
-  --sidebar-bg:var(--frame);
-  --sidebar-hover:var(--surface-sunken);
+  --sidebar:var(--card);
+  --sidebar-bg:var(--card);
+  --sidebar-hover:var(--sunken);
   --sidebar-text:var(--ink-2);
   --sidebar-text-active:var(--ink);
-  /* Internal elements never cast shadows; these resolve to none by design. */
-  --shadow-card:none;
-  --shadow-pastel:none;
-  --shadow-hover:none;
-  --shadow-modal:0 24px 64px rgba(20,20,20,.14);
+  --shadow-card:var(--card-shadow);
+  --shadow-sm:var(--card-shadow);
+  --shadow-md:var(--card-shadow);
+  --shadow-lg:var(--card-shadow);
+  --shadow-modal:var(--card-shadow);
+  --shadow-xl:var(--card-shadow);
+  --shadow-hover:var(--card-shadow);
   --r-job:var(--r-card);
   --r-panel:var(--r-bigcard);
-  --r-modal:18px;
+  --r-modal:16px;
   --r-md:var(--r-card);
   --r-lg:var(--r-bigcard);
-  /* legacy aliases kept so existing components don't break */
-  --accent:var(--primary);
-  --accent-dim:var(--primary-subtle);
-  --primary-start:var(--primary);
-  --primary-end:var(--primary);
-  --primary-dim:var(--primary-subtle);
-  --violet:var(--primary);
-  --brand-dark:var(--olive-dark);
-  --error:var(--danger);
-  --error-dim:var(--danger-subtle);
-  --warning-dim:var(--warning-subtle);
-  --success-dim:var(--success-subtle);
-  --dim:var(--text-muted);
-  --muted:var(--text-secondary);
-  --line:var(--border);
-  --line-bright:var(--border-strong);
-  --divider:rgba(20,20,20,.05);
-  --surface-2:var(--surface-sunken);
-  --surface-hover:var(--surface-sunken);
-  /* Manrope for numbers/headings, Inter for everything else — §2. */
-  --display:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-  --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-  --mono:'JetBrains Mono','IBM Plex Mono',monospace;
-  --paper:#FFFFFF;
   --radius-card:var(--r-card);
   --radius-btn:var(--r-btn);
   --radius-input:var(--r-input);
-  --shadow-sm:none;
-  --shadow-md:none;
-  --shadow-lg:none;
-  --shadow-xl:var(--shadow-modal);
-  --sidebar-w:224px;
-  --topbar-h:60px;
+  /* legacy aliases kept so existing components don't break */
+  --accent:var(--ink);
+  --accent-dim:var(--sunken);
+  --primary-start:var(--ink);
+  --primary-end:var(--ink);
+  --primary-dim:var(--sunken);
+  --violet:var(--ink);
+  --error:var(--danger);
+  --error-dim:var(--danger-soft);
+  --warning-dim:var(--warn-soft);
+  --success-dim:var(--verified-soft);
+  --dim:var(--ink-3);
+  --muted:var(--ink-2);
+  --line:var(--border);
+  --line-bright:var(--pill-border);
+  --divider:var(--border);
+  --track:var(--sunken);
 }
 
 /* ============================================================ RESET */
@@ -681,64 +714,23 @@ tbody tr:hover{background:var(--bg);}
 @media(max-width:960px){.dash-grid{grid-template-columns:1fr;}.dash-col-right{position:static;max-height:none;}.editor-shell{grid-template-columns:160px 1fr;}.doc-side{display:none;}}
 
 /* ============================================================
-   DARK THEME — full override when data-theme="dark" is set.
-   Sage identity is preserved; pastels lift to low-alpha tints so they stay
-   decorative rather than glowing against a dark canvas.
+   DARK THEME — form controls and surfaces that need an explicit
+   treatment beyond the token swap in the v3 block at the top.
    ============================================================ */
-[data-theme="dark"]{
-  --canvas:#121817;
-  --bg:#121817;
-  --surface:#19211F;
-  --surface-sunken:#1F2926;
-  --surface-2:#1F2926;
-  --surface-hover:#243029;
-  --border:rgba(255,255,255,.08);
-  --border-strong:rgba(255,255,255,.14);
-  --ink:#EAF0EE;
-  --ink-2:#A5B2AF;
-  --ink-3:#6F7C79;
-  --text:#EAF0EE;
-  --text-2:#A5B2AF;
-  --text-3:#6F7C79;
-  --text-secondary:#A5B2AF;
-  --text-muted:#6F7C79;
-  --brand:#5A9A94;
-  --brand-hover:#6BAEA7;
-  --brand-soft:rgba(90,154,148,.18);
-  --mint:rgba(93,197,145,.16);
-  --butter:rgba(230,190,80,.16);
-  --sky:rgba(120,180,205,.16);
-  --lavender:rgba(150,140,215,.16);
-  --peach:rgba(225,155,120,.16);
-  --rose:rgba(220,140,150,.16);
-  --status-ready-bg:rgba(90,154,148,.18);   --status-ready-text:#7FC0B9;
-  --status-applied-bg:rgba(120,180,205,.16); --status-applied-text:#8FC4D8;
-  --status-tailoring-bg:rgba(150,140,215,.16); --status-tailoring-text:#A9A3E8;
-  --status-needs-bg:rgba(200,90,90,.16);    --status-needs-text:#E08A8A;
-  --good-soft:rgba(90,154,148,.18);
-  --bad-soft:rgba(200,90,90,.16);
-  --warn-soft:rgba(230,190,80,.16);
-  --primary-subtle:rgba(90,154,148,.18);
-  --success-subtle:rgba(90,154,148,.18);
-  --warning-subtle:rgba(230,190,80,.16);
-  --danger-subtle:rgba(200,90,90,.16);
-  --admin-subtle:rgba(230,190,80,.16);
-  --topbar-bg:#19211F;
-  --paper:#151C1B;
+html[data-theme="dark"] input[type=text],html[data-theme="dark"] input[type=email],
+html[data-theme="dark"] input[type=password],html[data-theme="dark"] input[type=number],
+html[data-theme="dark"] textarea,html[data-theme="dark"] select{
+  background:rgba(255,255,255,.04);color:var(--ink);border-color:var(--pill-border);
 }
-[data-theme="dark"] .topbar{background:#19211F;}
-[data-theme="dark"] input[type=text],[data-theme="dark"] input[type=email],[data-theme="dark"] input[type=password],[data-theme="dark"] input[type=number],[data-theme="dark"] textarea,[data-theme="dark"] select{background:#121817;color:var(--text);border-color:rgba(255,255,255,.12);}
-[data-theme="dark"] table thead th{background:#1F2926;}
-[data-theme="dark"] .logo-mark{background:var(--brand);}
-[data-theme="dark"] .pastel-card{border-color:rgba(255,255,255,.08);}
+html[data-theme="dark"] table thead th{background:rgba(255,255,255,.03);}
+html[data-theme="dark"] .doc,html[data-theme="dark"] .paper{background:var(--card);}
 
 /* ============================================================
-   FIX: bar-track is used both in sidebar (dark bg) and main content (light bg).
-   Sidebar overrides its own track via .credit-mini; everything else uses light bg.
+   Progress tracks
    ============================================================ */
-.bar-track{height:5px;background:var(--border);border-radius:99px;overflow:hidden;}
-.credit-mini .bar-track,.credit-card .bar-track{background:#232733;margin-bottom:10px;}
-.bar-fill{height:100%;background:var(--brand);border-radius:99px;transition:width .4s;}
+.bar-track{height:5px;background:var(--sunken);border-radius:var(--r-pill);overflow:hidden;}
+.credit-mini .bar-track,.credit-card .bar-track{background:var(--sunken);margin-bottom:10px;}
+.bar-fill{height:100%;background:var(--cta-bg);border-radius:var(--r-pill);transition:width .4s;}
 
 /* ============================================================
    DASHBOARD LANDING — stat cards, quick-start tiles, feature banner
@@ -1362,128 +1354,181 @@ table tbody tr{border-top:1px solid var(--border);}
 }
 .empty-state{position:relative;}
 
+
 /* ============================================================
-   DESIGN SYSTEM v2 — OLIVE + HATCH
-   Loaded last so it overrides the earlier direction's rules.
+   DESIGN SYSTEM v3 — DUAL THEME COMPONENTS
+   Loaded last so it overrides the superseded v1/v2 rules above.
+   Every rule below is written once and works in both themes,
+   because it only ever references theme tokens (§1).
    ============================================================ */
 
-/* ---- §7 Shadow discipline: exactly one shadow, on the frame ---- */
-.card,.panel,.stat-card,.big-card,.result-shell,.opt-block,.status-card,
-.quick-start-card,.qs-card,.resume-card,.domain-card,.pastel-card,
-table,.side,.sidebar,.topbar,table tbody tr,.nav-item{box-shadow:none;}
-.pastel-card:hover{transform:none;box-shadow:none;}
-
-/* ---- §2 Typography: Manrope for numbers/headings, Inter for the rest ---- */
-body{font-family:var(--sans);}
-h1,h2,h3,.page-title,.card-heading,.dash-greeting,.stat-card .value,
-.result-score,.gauge-num,.stat-num,.big-card-title,.match-linear .pct{
-  font-family:var(--display);
+/* ---- Ambient wash: the page owns the only decorative background ---- */
+body{
+  font-family:var(--sans);
+  background:var(--bg-wash);
+  background-attachment:fixed;
+  color:var(--ink);
 }
-.dash-greeting{font-size:24px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
-h1.page-title{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
-.page-sub{color:var(--ink-2);font-size:13.5px;}
-.big-card-title{font-size:17px;font-weight:700;color:var(--ink);}
-.card-heading,.panel-head h2,.section-title-row h2{font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);}
-.logo-name{font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.01em;}
-.logo-text .name,.brand-text .name{font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.01em;}
+.shell{background:transparent;}
 
-/* ---- §5 The hatch texture: the one signature device ---- */
-.hatch-grey{
-  background-image:repeating-linear-gradient(135deg,var(--hatch-grey) 0 3px,transparent 3px 8px);
-  background-color:#F7F7F8;
+/* ---- §5 Typography: Inter only; weight does the work ---- */
+h1,h2,h3,.page-title,.card-heading,.dash-greeting,.stat-card .value,.result-score{font-family:var(--sans);}
+.dash-greeting{font-size:32px;font-weight:800;letter-spacing:-.025em;color:var(--ink);}
+h1.page-title{font-size:26px;font-weight:800;letter-spacing:-.02em;color:var(--ink);}
+.page-sub{color:var(--ink-2);font-size:13px;}
+.card-heading,.panel-head h2,.section-title-row h2{font-size:16px;font-weight:700;color:var(--ink);}
+.logo-text .name,.brand-text .name,.logo-name{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+
+/* ---- §4 Card: border AND shadow, both themes ---- */
+.card,.panel,.big-card,.stat-card,.result-shell,.opt-block,.status-card,.resume-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r-card);
+  box-shadow:var(--card-shadow);
 }
-.hatch-olive{
-  background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.16) 0 3px,transparent 3px 8px),
-                   linear-gradient(var(--olive),var(--olive));
+.doc,.paper{background:var(--card);}
+
+/* ---- §4 CTA button: always a full pill, never a rounded rect ---- */
+.btn{border-radius:var(--r-pill);height:38px;font-weight:600;border:1px solid transparent;}
+.btn-primary,.cta-btn{background:var(--cta-bg);color:var(--cta-text);border-color:transparent;}
+.btn-primary:hover,.cta-btn:hover{background:var(--cta-hover);}
+.btn-secondary,.btn-ghost{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink);}
+.btn-ghost:hover,.btn-secondary:hover{background:var(--sunken);}
+.btn-sm{height:32px;}
+.btn-xs{height:26px;}
+
+/* ---- §3 Shell ---- */
+.side,.sidebar{background:var(--card);border-right:1px solid var(--border);}
+.topbar{background:transparent;border-bottom:1px solid var(--border);}
+.logo-mark,.brand-mark{background:var(--cta-bg);color:var(--cta-text);}
+
+/* Selected nav uses the same language as "click this" — solid ink in light,
+   the one gradient in dark. */
+.nav button.active,.nav-item.active{
+  background:var(--pill-sel-bg);color:var(--pill-sel-text);
+  border-left:none;padding-left:10px;border-radius:var(--r-sm);
 }
+.nav button.active .nav-icon,.nav-item.active .nav-icon{opacity:1;}
+.nav button.active .nav-count,.nav-item.active .nav-count{color:var(--pill-sel-text);}
+.nav button:hover,.nav-item:hover{background:var(--sunken);color:var(--ink);}
+.nav-badge{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);font-weight:700;}
+.nav-item.active .nav-badge{background:rgba(255,255,255,.22);border-color:transparent;color:var(--pill-sel-text);}
+.nav-group-label,.nav-section-label{color:var(--ink-3);}
 
-/* ---- §6 Cards ---- */
-.card,.panel{background:var(--frame);border:1px solid var(--card-border);border-radius:var(--r-card);}
-.big-card{background:var(--frame);border:1px solid var(--card-border);border-radius:var(--r-bigcard);padding:24px 26px;}
-.big-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;}
-.big-card-sub{font-size:12.5px;color:var(--ink-2);margin-top:3px;}
-
-.stat-card{border:1px solid var(--card-border);border-radius:var(--r-card);padding:18px 20px;}
-.stat-chip{
-  width:34px;height:34px;border-radius:10px;background:var(--olive-soft);color:var(--olive);
-  display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;
+.search-box,.cmdk-trigger{
+  background:var(--pill-bg);border:1px solid var(--pill-border);border-radius:var(--r-pill);
+  height:38px;padding:0 16px;color:var(--ink-3);
 }
-.stat-num{font-family:var(--display);font-size:25px;font-weight:700;color:var(--ink);letter-spacing:-.02em;line-height:1.1;margin-top:14px;}
-.stat-label{font-size:12.5px;color:var(--ink-2);margin-top:3px;}
-.stat-card .value{font-family:var(--display);font-size:25px;font-weight:700;letter-spacing:-.02em;}
-
-/* ---- §6 Delta pill: only ever next to a real comparison ---- */
-.delta-pill{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 8px;border-radius:var(--r-pill);margin-left:8px;}
-.delta-pill.pos{background:var(--pos-bg);color:var(--pos-text);}
-.delta-pill.neg{background:var(--neg-bg);color:var(--neg-text);}
-
-/* ---- §6 Status / activity tag ---- */
-.tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:var(--r-pill);}
-.tag.ok{background:var(--olive-pill-bg);color:var(--olive-dark);}
-.tag.attn{background:var(--neg-bg);color:var(--neg-text);}
-
-/* ---- §6 Bar chart ---- */
-.bar-chart{display:flex;align-items:flex-end;gap:10px;height:180px;}
-.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end;position:relative;}
-.bar{width:100%;border-radius:8px;transition:height .4s;}
-.bar-label{font-size:11.5px;color:var(--ink-3);font-weight:500;}
-.bar-col.active .bar-label{color:var(--ink);font-weight:700;}
-.bar-tip{
-  position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);
-  background:var(--ink);color:#fff;font-size:11.5px;font-weight:600;font-family:var(--display);
-  padding:5px 10px;border-radius:8px;white-space:nowrap;
+.search-box:hover,.cmdk-trigger:hover{background:var(--sunken);}
+.icon-btn{
+  background:var(--pill-bg);border:1px solid var(--pill-border);border-radius:50%;
+  width:36px;height:36px;color:var(--ink-2);
 }
-.bar-tip::after{
-  content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
-  border:5px solid transparent;border-top-color:var(--ink);
-}
+.icon-btn:hover{background:var(--sunken);color:var(--ink);}
+.avatar{background:var(--pill-sel-bg);color:var(--pill-sel-text);font-weight:700;}
 
-/* ---- §6 Dashed gauge: two paths, no chart dependency ---- */
-.gauge{position:relative;display:flex;flex-direction:column;align-items:center;}
-.gauge svg{display:block;overflow:visible;}
-.gauge .g-track{stroke:#E7E7EA;stroke-dasharray:4 6;fill:none;stroke-width:10;}
-.gauge .g-prog{stroke:var(--olive);stroke-linecap:round;fill:none;stroke-width:10;transition:stroke-dasharray .5s;}
-.gauge-center{position:absolute;top:52%;left:50%;transform:translate(-50%,-50%);text-align:center;}
-.gauge-num{font-family:var(--display);font-size:26px;font-weight:700;color:var(--ink);line-height:1;}
-.gauge-delta{font-size:12px;color:var(--ink-2);margin-top:4px;}
+.credit-mini,.credit-card{background:var(--pill-bg);border:1px solid var(--pill-border);}
+.credit-mini-buy,.credit-cta{border:1px solid var(--pill-border);color:var(--ink-2);border-radius:var(--r-pill);}
+.credit-mini-buy:hover,.credit-cta:hover{background:var(--sunken);color:var(--ink);}
+.profile-chip,.user-chip{border:1px solid var(--pill-border);border-radius:var(--r-card);}
+.profile-chip .name,.user-chip .name{color:var(--ink);}
+.profile-chip .role,.user-chip .email{color:var(--ink-3);}
 
-/* ---- §6 Activity row ---- */
-.activity-row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--card-border);}
-.activity-row:last-child{border-bottom:none;}
-.activity-avatar{
-  width:34px;height:34px;border-radius:10px;background:var(--olive-soft);color:var(--olive-dark);
-  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;
+/* ---- §4 Pills / tags ---- */
+.pill,.stage-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);
+  font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:var(--r-pill);
 }
-.activity-name{font-size:13.5px;font-weight:600;color:var(--ink);}
-.activity-meta{font-size:12px;color:var(--ink-2);margin-top:1px;}
-.activity-time{margin-left:auto;font-size:12px;color:var(--ink-3);white-space:nowrap;}
+.pill.active-stage,.stage-pill.active-stage{
+  background:var(--verified-soft);border-color:transparent;color:var(--verified);
+}
+.badge{border-radius:var(--r-pill);font-weight:700;}
+.badge-neutral{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);}
+.badge-success,.badge-green{background:var(--verified-soft);color:var(--verified);}
+.badge-primary,.badge-violet{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink);}
 
-/* ---- §6 Buttons: pill-bordered by default; solid olive stays rare ---- */
-.btn{border-radius:var(--r-pill);height:38px;font-family:var(--sans);font-weight:600;}
-.btn-secondary,.btn-ghost{border:1px solid var(--card-border);background:var(--frame);color:var(--ink);}
-.btn-ghost:hover,.btn-secondary:hover{background:var(--surface-sunken);}
-.btn-primary{background:var(--olive);color:#fff;border-color:var(--olive);}
-.btn-primary:hover{background:var(--olive-dark);border-color:var(--olive-dark);}
-.btn-pill{
-  display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 18px;
-  border:1px solid var(--card-border);border-radius:var(--r-pill);background:var(--frame);
-  color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;transition:.12s;
-}
-.btn-pill:hover{background:var(--surface-sunken);}
-.avatar-btn{
-  all:unset;width:36px;height:36px;border-radius:50%;background:var(--olive-soft);color:var(--olive-dark);
-  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;cursor:pointer;
-  font-family:var(--display);
+/* Verification signal — never reused as generic "good" decoration (§6). */
+.verified-check{color:var(--verified);font-size:12px;}
+
+/* ---- §4 Match ring. In dark the stroke references the SVG gradient def;
+   CSS cannot gradient a stroke, so ResumePreview/AgentView emit
+   <linearGradient id="gradRing"> once and every ring points at it. ---- */
+.match-ring{position:relative;display:inline-flex;flex:none;}
+.match-ring svg{transform:rotate(-90deg);display:block;}
+.match-ring .ring-track{stroke:var(--border);fill:none;}
+.match-ring .ring-prog{stroke:var(--ink);fill:none;stroke-linecap:round;transition:stroke-dasharray .5s;}
+html[data-theme="dark"] .match-ring .ring-prog{stroke:url(#gradRing);}
+.match-ring .ring-num{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:12.5px;font-weight:800;color:var(--ink);
 }
 
-/* Progress fills are hatch-textured, never flat (§9). */
-.bar-fill,.progress-fill,.credit-bar > div{
-  background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.16) 0 3px,transparent 3px 8px),
-                   linear-gradient(var(--olive),var(--olive));
-}
-.bar-track,.progress-bar{background:var(--track);}
+/* ---- §4 Pipeline row ---- */
+.pipe-row{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border);}
+.pipe-row:last-child{border-bottom:none;}
+.pipe-body{flex:1;min-width:0;}
+.pipe-name{font-size:13.5px;font-weight:700;color:var(--ink);}
+.pipe-meta{font-size:12px;color:var(--ink-2);margin-top:2px;}
 
-/* The pastel and dot-grid devices belong to the superseded direction. */
-.pastel-card{background:var(--frame);border:1px solid var(--card-border);border-radius:var(--r-card);}
+/* ---- §4 Job / opportunity card ---- */
+.job-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r-card);
+  box-shadow:var(--card-shadow);padding:18px;display:flex;flex-direction:column;gap:10px;
+}
+.job-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.logo-chip{
+  width:34px;height:34px;border-radius:10px;flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;
+}
+.job-company{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:var(--ink);}
+.job-role{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+.job-meta{font-size:12px;color:var(--ink-2);}
+.job-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;}
+.job-match{font-size:12px;color:var(--ink-3);font-weight:600;}
+/* Rhythm only — roughly 1 in 4, never a status signal (§6). */
+.job-card.invert{background:var(--ink);border-color:var(--ink);}
+.job-card.invert .job-role,.job-card.invert .job-company{color:var(--bg-solid);}
+.job-card.invert .job-meta,.job-card.invert .job-match{color:var(--bg-solid);opacity:.7;}
+.job-card.invert .cta-btn,.job-card.invert .btn-primary{background:var(--bg-solid);color:var(--ink);}
+
+/* ---- §4 Empty / drop state: dashed box, no texture inside ---- */
+.dropzone,.empty-drop{
+  border:1.5px dashed var(--pill-border);border-radius:var(--r-card);
+  background:transparent;color:var(--ink-3);
+}
+.dropzone:hover,.dropzone.drag{border-color:var(--ink-3);background:var(--sunken);}
+
+/* ---- Inputs ---- */
+input[type=text],input[type=email],input[type=password],input[type=number],textarea,select{
+  background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink);border-radius:var(--r-input);
+}
+input::placeholder,textarea::placeholder{color:var(--ink-3);}
+:focus-visible{outline:2px solid var(--ink-2);outline-offset:2px;}
+::selection{background:var(--sunken);}
+
+/* ---- Tables ---- */
+table thead th{background:transparent;color:var(--ink-3);font-weight:700;}
+table tbody tr{border-top:1px solid var(--border);}
+
+/* ---- Workspace surfaces inherit the card treatment ---- */
+.opt-footer{background:transparent;border-top:1px solid var(--border);}
+.result-tabs{background:transparent;border-bottom:1px solid var(--border);}
+.result-tab.active{color:var(--ink);border-bottom-color:var(--ink);}
+.ws-col-num{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);}
+.seg-ctrl{border:1px solid var(--pill-border);border-radius:var(--r-pill);overflow:hidden;}
+.seg-ctrl button.active,.mode-btn.active{background:var(--pill-sel-bg);color:var(--pill-sel-text);}
+.start-tile{border:1px solid var(--pill-border);background:var(--pill-bg);border-radius:var(--r-sm);}
+.start-tile.selected{border-color:transparent;background:var(--pill-sel-bg);}
+.start-tile.selected .start-tile-title{color:var(--pill-sel-text);}
+.start-tile.selected .start-tile-desc{color:var(--pill-sel-text);opacity:.75;}
+.radio-card.selected,.domain-row.selected{background:var(--sunken);border-color:var(--ink-3);}
+.kw-chip{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink);}
+.chip{background:var(--pill-bg);border:1px solid var(--pill-border);color:var(--ink-2);border-radius:var(--r-pill);}
+.progress-fill{background:var(--cta-bg);}
+.progress-bar{background:var(--sunken);}
+.hl-term{background:var(--verified-soft);color:var(--verified);}
+
+/* ---- §6 Superseded devices from v1/v2 are neutralised, not blended ---- */
+.hatch-grey,.hatch-olive{background-image:none;background-color:transparent;}
+.pastel-card{background:var(--card);border:1px solid var(--border);}
 .dot-grid{background-image:none;}
-
+.build-cat .cat-body,.build-cat .cat-head,.build-cat .cat-tail{fill:var(--ink-2);stroke:var(--ink-2);}
