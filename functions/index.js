@@ -13,6 +13,9 @@ const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 
 const STARTER_CREDITS = 10;
 
+// Coverage score a from-scratch build is repaired toward before it ships.
+const ATS_SCORE_TARGET = 92;
+
 // Authorization is always re-checked server-side against this list on every
 // admin-only call — the client-visible `role` field on the user doc is
 // display-only, never trusted for actual access control.
@@ -1325,7 +1328,7 @@ JOB TITLE: ${jobDescription.title || ''}`;
       })
       .filter(p => p.score > 0)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 10)
+      .slice(0, 14)
       .map(p => p.text);
     const priorityEmployers = (strategy.experiencePriority || []).filter(e => e.level === 'Very High' || e.level === 'High').map(e => e.employer).join(', ');
 
@@ -1394,8 +1397,13 @@ PRIORITY EMPLOYERS TO LEAD WITH: ${priorityEmployers || 'all'}
 POSITIONING: ${strategy.positioning || ''}
 SKILLS TO HIGHLIGHT: ${(strategy.skillPriority || []).slice(0, 8).join(', ')}
 ${styleNote ? `STYLE DIRECTIVES: ${styleNote}` : ''}${bulletPatterns.length ? `
-DOMAIN PHRASING PATTERNS (proven shapes for this industry). Square brackets mark values you must take from the ground truth. Use a pattern only when the ground truth supplies every value it needs, and never emit a bracketed placeholder or an invented number in the output:
-- ${bulletPatterns.join('\n- ')}` : ''}${previousResume ? `
+
+DOMAIN PHRASING PATTERNS - curated shapes for this industry, ranked by relevance to this JD. These are guidance on structure and vocabulary, never text to copy:
+- Rebuild each one around the candidate's real facts from the ground truth. A pattern is a skeleton, not a sentence to paste.
+- Square brackets mark values that must come from the ground truth. If a bracketed value is not supported, drop that clause and keep the rest of the shape. Never emit a bracket, and never invent the value.
+- Skip any pattern whose underlying experience the candidate does not actually have. Covering four patterns truthfully beats covering ten loosely.
+- The finished bullets must read as this person's own work history. Vary sentence structure and opening verbs so nothing reads as a filled-in template.
+${bulletPatterns.map(p => `- ${p}`).join('\n')}` : ''}${previousResume ? `
 
 EXISTING DRAFT — revise this, do not start over:
 ${JSON.stringify(previousResume)}
@@ -1445,10 +1453,10 @@ Apply the POSITIONING instructions above to the draft as targeted edits. Keep ev
 
     let { matches: requirementMatches, score: matchScore } = scoreAgainstRequirements(content);
 
-    // Measured-then-repair, run up to twice: build-from-scratch has no source
-    // resume to fall back on, so it needs more than one shot to converge.
+    // Measured-then-repair: build-from-scratch has no source resume to fall back
+    // on, so it needs several shots to converge on the score target.
     let buildAudit = auditAts(content, []);
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       const missing = requirementMatches
         .filter(m => m.evidenceStrength !== 'STRONG')
         .sort((a, b) => (b.importance === 'Critical') - (a.importance === 'Critical'))
@@ -1456,14 +1464,20 @@ Apply the POSITIONING instructions above to the draft as targeted edits. Keep ev
 
       buildAudit = { ...auditAts(content, []), missingKeywords: missing.slice(0, 14) };
       const repairList = atsRepairInstruction(buildAudit);
-      const needsWork = matchScore < 92 || Boolean(repairList);
-      if (!needsWork || !repairList) break;
+      if (matchScore >= ATS_SCORE_TARGET && !repairList) break;
+
+      // Previously the loop bailed whenever the ATS audit was clean, so a draft
+      // could ship below target with no attempt to close the coverage gap.
+      const gapNote = missing.length
+        ? `\nRequirements not yet strongly evidenced, Critical first: ${missing.slice(0, 14).join('; ')}.`
+        : '';
+      if (!repairList && !gapNote) break;
 
       try {
         const repaired = await runAgentBuildPass(`${userPrompt}
 
-Your previous draft was audited mechanically against the resume text you produced. It scored ${matchScore}/100 on JD requirement coverage, against a 92 target. Produce a corrected version that fixes every item below while keeping everything that already works:
-${repairList}
+Your previous draft was audited mechanically against the resume text you produced. It scored ${matchScore}/100 on JD requirement coverage, against a ${ATS_SCORE_TARGET} target. Produce a corrected version that fixes every item below while keeping everything that already works:
+${repairList}${gapNote}
 
 Weave each missing requirement into a real accomplishment bullet or the summary using the JD's own wording. Never invent employers, dates, credentials, or metrics that are not in the ground truth — if a requirement genuinely has no supporting evidence, leave it out rather than fabricating one.`, `agentBuild_repair_${attempt + 1}`);
         const rescored = scoreAgainstRequirements(repaired);
