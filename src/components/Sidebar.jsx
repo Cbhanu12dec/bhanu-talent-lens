@@ -82,14 +82,14 @@ export default function Sidebar({ view, setView, resumeCount, credits, creditsMa
         <div className="credit-mini">
           <div className="credit-mini-top">
             <span className="credit-mini-label">Credits Left</span>
-            <b style={{ color: '#fff', fontWeight: 600, fontSize: 12 }}>{credits ?? '—'} / {creditsTotal}</b>
+            <b className="credit-mini-val">{credits ?? '—'} / {creditsTotal}</b>
           </div>
           <div className="bar-track">
             <div className="bar-fill" style={{ width: `${creditsPct}%` }} />
           </div>
-          <div className="credit-mini-buy" onClick={() => setView('billing')}>
+          <button className="credit-mini-buy primary" onClick={() => setView('billing')}>
             + Buy More Credits
-          </div>
+          </button>
         </div>
 
         <div className="profile-chip" style={{ cursor: 'default' }}>
