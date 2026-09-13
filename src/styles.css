@@ -1690,16 +1690,18 @@ table tbody tr{border-top:1px solid var(--border);}
 .dl-filter{background:none;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:600;color:var(--ink-2);cursor:pointer;}
 .dl-filter span{color:var(--ink-3);margin-left:3px;}
 .dl-filter.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);}
-.dl-domain-list{display:flex;flex-direction:column;gap:8px;max-height:calc(100dvh - var(--topbar-h) - 268px);overflow-y:auto;padding:2px;margin:-2px;}
+.dl-domain-list{display:flex;flex-direction:column;gap:8px;max-height:max(220px,calc(100dvh - var(--topbar-h) - 268px));overflow-y:auto;padding:2px;margin:-2px;}
 .dl-domain-item{background:var(--card);border:1px solid var(--border);border-left:3px solid transparent;border-radius:12px;padding:12px 14px;cursor:pointer;position:relative;transition:.12s;}
 .dl-domain-item:hover{border-color:var(--brand);}
 /* §1 rule 1: soft tint + brand border, never a solid fill. */
 .dl-domain-item.sel{background:var(--brand-soft);border-color:var(--brand);border-left-color:var(--brand);}
-.dl-domain-item-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
-.dl-domain-name{font-size:13px;font-weight:600;color:var(--navy);}
-.dl-domain-item-meta{font-size:11px;color:var(--ink-3);margin-top:4px;}
-.dl-domain-item-menu{position:absolute;top:8px;right:8px;opacity:0;}
-.dl-domain-item:hover .dl-domain-item-menu,.dl-domain-item.sel .dl-domain-item-menu{opacity:1;}
+.dl-domain-item-top{display:flex;align-items:flex-start;gap:8px;}
+.dl-domain-name{font-size:13px;font-weight:600;color:var(--navy);flex:1;min-width:0;}
+/* The menu lives on the meta row: absolutely positioned top-right it sat on top
+   of the status badge, and inline on the title row it squeezed the name. */
+.dl-domain-item-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--ink-3);margin-top:4px;min-height:22px;}
+.dl-domain-item-menu{flex:none;opacity:0;transition:opacity .12s;}
+.dl-domain-item:hover .dl-domain-item-menu,.dl-domain-item.sel .dl-domain-item-menu,.dl-domain-item:focus-within .dl-domain-item-menu{opacity:1;}
 
 .dl-work{min-width:0;display:flex;flex-direction:column;gap:14px;}
 .dl-work-head{background:var(--card);border-radius:16px;padding:18px 20px;box-shadow:0 8px 20px var(--navy-shadow);display:flex;align-items:flex-start;justify-content:space-between;gap:14px;}
@@ -1759,7 +1761,7 @@ table tbody tr{border-top:1px solid var(--border);}
 .dl-seg button{background:var(--card);border:none;padding:0 12px;height:32px;font-size:12px;font-weight:600;color:var(--ink-2);cursor:pointer;}
 .dl-seg button.on{background:var(--brand-soft);color:var(--brand);}
 
-.dl-badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:10.5px;font-weight:700;text-transform:capitalize;}
+.dl-badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:10.5px;font-weight:700;text-transform:capitalize;flex:none;white-space:nowrap;}
 .dl-badge.ok{background:var(--success-soft);color:var(--success);}
 .dl-badge.neutral{background:var(--navy-soft);color:var(--ink-2);}
 .dl-badge.muted{background:#F0F2F6;color:var(--ink-3);}

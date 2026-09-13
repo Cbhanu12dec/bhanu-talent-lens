@@ -219,11 +219,11 @@ export default function DomainLibraryView({ notify }) {
                         <StatusBadge status={d.status} />
                       </div>
                       <div className="dl-domain-item-meta">
-                        {d.counts.subDomains} sub-domains · {d.counts.skills} skills
-                      </div>
-                      <div className="dl-rel dl-domain-item-menu">
-                        <button className="dl-icon-btn" onClick={e => { e.stopPropagation(); setMenuFor(menuFor === d.id ? null : d.id); }}>•••</button>
-                        {menuFor === d.id && <Menu onClose={() => setMenuFor(null)} items={domainMenu(d)} />}
+                        <span>{d.counts.subDomains} sub-domains · {d.counts.skills} skills</span>
+                        <div className="dl-rel dl-domain-item-menu">
+                          <button className="dl-icon-btn" onClick={e => { e.stopPropagation(); setMenuFor(menuFor === d.id ? null : d.id); }}>•••</button>
+                          {menuFor === d.id && <Menu onClose={() => setMenuFor(null)} items={domainMenu(d)} />}
+                        </div>
                       </div>
                     </div>
                   ))}

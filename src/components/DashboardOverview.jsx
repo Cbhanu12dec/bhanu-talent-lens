@@ -69,7 +69,7 @@ function buildRecommendations({ profile, resumes, activeResume, setView }) {
   return recs.slice(0, 4);
 }
 
-export default function DashboardOverview({ uid, state, setView, credits }) {
+export default function DashboardOverview({ uid, state, setView }) {
   const { resumes = [], profileInfo = {}, activeResumeId } = state;
   const [profiles, setProfiles] = useState([]);
   const [activeProfileId, setActiveProfileId] = useState('');
@@ -85,8 +85,6 @@ export default function DashboardOverview({ uid, state, setView, credits }) {
   const profile = profiles.find(p => p.id === activeProfileId) || null;
   const activeResume = resumes.find(r => r.id === activeResumeId) || resumes[0] || null;
   const completeness = completenessOf(profile);
-  const scored = resumes.filter(r => r.atsScore);
-  const bestScore = scored.length ? Math.max(...scored.map(r => r.atsScore)) : null;
   const firstName = profileInfo?.name ? profileInfo.name.split(' ')[0] : null;
 
   const recs = buildRecommendations({ profile, resumes, activeResume, setView });
@@ -133,18 +131,6 @@ export default function DashboardOverview({ uid, state, setView, credits }) {
           </button>
         </div>
         <div className="hero-glyph">✦</div>
-      </div>
-
-      {/* Capped at 2 solid-fill stat cards (§6). */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16, marginBottom: 18 }}>
-        <div className="mini-stat brand">
-          <div className="num">{bestScore != null ? `${bestScore}%` : '—'}</div>
-          <div className="lbl">Best ATS match</div>
-        </div>
-        <div className="mini-stat navy">
-          <div className="num">{credits ?? '—'}</div>
-          <div className="lbl">Credits left</div>
-        </div>
       </div>
 
       <div className="dash-two-col">
