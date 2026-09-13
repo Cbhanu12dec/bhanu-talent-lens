@@ -266,10 +266,10 @@ export async function listJobDescriptions(uid) {
 // AGENT RUNS  (users/{uid}/agentRuns/{runId})
 // ============================================================
 
-export async function createAgentRun(uid, { careerProfileSnapshot, domainId, jobDescriptionId }) {
+export async function createAgentRun(uid, { careerProfileSnapshot, domainId, subDomainId = null, jobDescriptionId }) {
   const id = 'run_' + Date.now();
   const data = {
-    id, careerProfileSnapshot, domainId, jobDescriptionId,
+    id, careerProfileSnapshot, domainId, subDomainId, jobDescriptionId,
     currentStep: 'setup', status: 'in_progress',
     strategySnapshot: null, buildLog: [],
     startedAt: serverTimestamp(), completedAt: null,

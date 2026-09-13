@@ -6,7 +6,7 @@ import {
 } from '../lib/firestore.js';
 import {
   parseJobDescription, analyzeAgentRun, buildAgentResume, tailorResume, getJdBreakdown,
-  ocrImages, generateCoverLetter, draftEmail
+  ocrImages, generateCoverLetter, draftEmail, listPublicSubDomains
 } from '../lib/claude.js';
 import { buildResumePdf, downloadBlob } from '../lib/pdf.js';
 import { buildResumeDocx } from '../lib/docx.js';
@@ -193,6 +193,9 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   const [domains, setDomains] = useState([]);
   const [customDomains, setCustomDomains] = useState([]);
   const [selectedDomainId, setSelectedDomainId] = useState('');
+  const [subDomains, setSubDomains] = useState([]);
+  const [selectedSubDomainId, setSelectedSubDomainId] = useState('');
+  const [loadingSubDomains, setLoadingSubDomains] = useState(false);
   const [domainQuery, setDomainQuery] = useState('');
   const [createDomainOpen, setCreateDomainOpen] = useState(false);
   const [newDomainName, setNewDomainName] = useState('');
@@ -227,6 +230,21 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   const [buildStageIdx, setBuildStageIdx] = useState(0);
   const [buildDone, setBuildDone] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+
+  // Specialities are fetched per domain rather than bundled with the domain
+  // list, since only published sub-domains of a published domain are exposed.
+  useEffect(() => {
+    setSelectedSubDomainId('');
+    setSubDomains([]);
+    if (!selectedDomainId || allDomains.find(d => d.id === selectedDomainId)?.isCustom) return;
+    let cancelled = false;
+    setLoadingSubDomains(true);
+    listPublicSubDomains(selectedDomainId)
+      .then(list => { if (!cancelled) setSubDomains(list); })
+      .catch(() => { if (!cancelled) setSubDomains([]); })
+      .finally(() => { if (!cancelled) setLoadingSubDomains(false); });
+    return () => { cancelled = true; };
+  }, [selectedDomainId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Review state — every generate appends to history so earlier drafts stay
   // reachable instead of being overwritten.
@@ -292,6 +310,8 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   // so the server-side lookup must be skipped and their keywords passed inline.
   const isCustomDomain = Boolean(selectedDomain?.isCustom);
   const effectiveDomainId = isCustomDomain ? null : selectedDomainId;
+  const effectiveSubDomainId = effectiveDomainId ? (selectedSubDomainId || null) : null;
+  const selectedSubDomain = subDomains.find(s => s.id === selectedSubDomainId) || null;
   const domainDirective = isCustomDomain && selectedDomain.keywords?.length
     ? `Target specialization "${selectedDomain.name}". Prioritize this domain's vocabulary throughout: ${selectedDomain.keywords.join(', ')}.`
     : '';
@@ -332,7 +352,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     try {
       addLog(BUILD_STAGES.scratch[0]); advanceStage();
       const jdDoc = await createJobDescription(uid, jdText.trim());
-      const runDoc = await createAgentRun(uid, { careerProfileSnapshot: profile, domainId: effectiveDomainId, jobDescriptionId: jdDoc.id });
+      const runDoc = await createAgentRun(uid, { careerProfileSnapshot: profile, domainId: effectiveDomainId, subDomainId: effectiveSubDomainId, jobDescriptionId: jdDoc.id });
       setRunId(runDoc.id);
 
       addLog(BUILD_STAGES.scratch[1]); advanceStage();
@@ -341,7 +361,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
       setJobDescription(fullJd);
 
       addLog(BUILD_STAGES.scratch[2]); advanceStage();
-      const strat = await analyzeAgentRun({ agentRunId: runDoc.id, careerProfile: profile, jobDescription: fullJd, domainId: effectiveDomainId });
+      const strat = await analyzeAgentRun({ agentRunId: runDoc.id, careerProfile: profile, jobDescription: fullJd, domainId: effectiveDomainId, subDomainId: effectiveSubDomainId });
       setFindings({ roleMatch: strat.roleMatch, strongestEvidence: strat.strongestEvidence || [], gaps: [] });
       setStrategy(strat);
       await updateAgentRun(uid, runDoc.id, { currentStep: 'strategy', strategySnapshot: strat, jobDescriptionParsed: fullJd });
@@ -349,7 +369,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
       addLog(BUILD_STAGES.scratch[3]); advanceStage();
       const withInstructions = { ...strat, positioning: appendCustom(strat.positioning, [domainDirective, customInstructions].filter(Boolean).join(' ')) };
       const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
-        agentRunId: runDoc.id, careerProfile: profileForBuild, jobDescription: fullJd, strategy: withInstructions, domainId: effectiveDomainId,
+        agentRunId: runDoc.id, careerProfile: profileForBuild, jobDescription: fullJd, strategy: withInstructions, domainId: effectiveDomainId, subDomainId: effectiveSubDomainId,
       });
       addLog(BUILD_STAGES.scratch[4]); advanceStage();
       addLog(`Build complete — match score ${matchScore}%`);
@@ -379,7 +399,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     addLog('Rebuilding with your instructions…');
     try {
       const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
-        agentRunId: runId, careerProfile: profileForBuild, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId,
+        agentRunId: runId, careerProfile: profileForBuild, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId, subDomainId: effectiveSubDomainId,
       });
       addLog(`Build complete — match score ${matchScore}%`);
       const v = await getResumeVersion(uid, versionId);
@@ -474,7 +494,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
         addLog(basedOnDraft ? 'Applying your instructions to the draft…' : 'Rewriting bullets against the JD…');
         const updatedStrategy = { ...strategy, positioning: appendCustom(strategy.positioning, [domainDirective, directive].filter(Boolean).join(' ')) };
         const { versionId, matchScore, creditsRemaining } = await buildAgentResume({
-          agentRunId: runId, careerProfile: profileForBuild, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId,
+          agentRunId: runId, careerProfile: profileForBuild, jobDescription, strategy: updatedStrategy, domainId: effectiveDomainId, subDomainId: effectiveSubDomainId,
           previousResume: basedOnDraft ? version.content : undefined,
         });
         addLog('Scoring match…');
@@ -744,7 +764,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
 
             {/* ---- Target domain (scratch only) ---- */}
             {mode === 'scratch' && (
-              <OptBlock title="Target domain" summary={selectedDomain?.name}>
+              <OptBlock title="Target domain" summary={selectedDomain ? (selectedSubDomain ? `${selectedDomain.name} · ${selectedSubDomain.name}` : selectedDomain.name) : undefined}>
                 <input className="domain-search" type="text" placeholder="Search domains…" value={domainQuery} onChange={e => setDomainQuery(e.target.value)} />
                 {filteredDomains.length > 0 ? (
                   <div className="domain-list">
@@ -763,6 +783,34 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
                   </div>
                 ) : (
                   <div className="field-hint">No domains match “{domainQuery}”. Create one below.</div>
+                )}
+
+                {/* Speciality narrows the vocabulary and writing instructions the
+                    agent receives to this sub-domain plus the domain-wide set. */}
+                {selectedDomainId && !isCustomDomain && (
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <label className="field-label">
+                      Speciality {subDomains.length > 0 && <span className="count">({subDomains.length})</span>}
+                    </label>
+                    {loadingSubDomains ? (
+                      <div className="field-hint">Loading specialities…</div>
+                    ) : subDomains.length === 0 ? (
+                      <div className="field-hint">This domain has no published specialities — the whole domain will be used.</div>
+                    ) : (
+                      <>
+                        <select value={selectedSubDomainId} onChange={e => setSelectedSubDomainId(e.target.value)}>
+                          <option value="">Whole domain — use everything</option>
+                          {subDomains.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <div className="field-hint">
+                          {selectedSubDomain?.description
+                            || (selectedSubDomainId
+                              ? 'Narrows the agent to this speciality plus domain-wide guidance.'
+                              : 'Pick one to focus the resume on a single speciality.')}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
 
                 {!createDomainOpen ? (

@@ -30,7 +30,9 @@ function requireAdmin(request) {
 // `categories[]` array, or the Domain Library sub-collections. Only published
 // skills/bullets and active instructions are ever fed to a build — draft
 // authoring content must not leak into a candidate's resume.
-async function loadDomainContent(domainId) {
+// When `subDomainId` is given, domain-wide items still apply; only *other*
+// sub-domains' content is excluded.
+async function loadDomainContent(domainId, subDomainId = null) {
   const empty = { vocab: [], directives: [], bulletTemplates: [] };
   if (!domainId) return empty;
   const ref = db.collection('domains').doc(domainId);
@@ -44,17 +46,18 @@ async function loadDomainContent(domainId) {
     return { vocab: legacyVocab, directives: legacyDirectives, bulletTemplates: [] };
   }
 
+  const inScope = data => !data.subDomainId || !subDomainId || data.subDomainId === subDomainId;
   const [skills, instructions, bullets] = await Promise.all([
     ref.collection('skills').where('status', '==', 'published').get(),
     ref.collection('instructions').where('status', '==', 'active').get(),
     ref.collection('bulletPoints').where('status', '==', 'published').get(),
   ]);
   return {
-    vocab: skills.docs.map(s => s.data().name).filter(Boolean),
-    directives: instructions.docs
-      .sort((a, b) => (a.data().sortOrder || 0) - (b.data().sortOrder || 0))
-      .map(i => i.data().instruction).filter(Boolean),
-    bulletTemplates: bullets.docs.map(b => b.data().text).filter(Boolean),
+    vocab: skills.docs.map(s => s.data()).filter(inScope).map(s => s.name).filter(Boolean),
+    directives: instructions.docs.map(i => i.data()).filter(inScope)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+      .map(i => i.instruction).filter(Boolean),
+    bulletTemplates: bullets.docs.map(b => b.data()).filter(inScope).map(b => b.text).filter(Boolean),
   };
 }
 
@@ -1167,13 +1170,13 @@ ${rawText}`;
 
   // ---- TASK: agentAnalyze — map profile evidence against JD requirements ----
   if (task === 'agentAnalyze') {
-    const { agentRunId, careerProfile, jobDescription, domainId } = payload || {};
+    const { agentRunId, careerProfile, jobDescription, domainId, subDomainId } = payload || {};
     if (!careerProfile || !jobDescription) throw new HttpsError('invalid-argument', 'careerProfile and jobDescription are required.');
 
     // Load domain internals server-side — never exposed to client
     let domainContext = '';
     if (domainId) {
-      const { vocab, directives } = await loadDomainContent(domainId);
+      const { vocab, directives } = await loadDomainContent(domainId, subDomainId);
       if (vocab.length || directives.length) {
         domainContext = `\nDomain vocabulary (transferable skill synonyms): ${vocab.join(', ')}\nStyle directives: ${directives.join('; ')}`;
       }
@@ -1223,7 +1226,7 @@ JOB TITLE: ${jobDescription.title || ''}`;
 
   // ---- TASK: agentBuild — generate full resume from profile + strategy ----
   if (task === 'agentBuild') {
-    const { agentRunId, careerProfile, jobDescription, strategy, domainId, previousResume } = payload || {};
+    const { agentRunId, careerProfile, jobDescription, strategy, domainId, subDomainId, previousResume } = payload || {};
     if (!careerProfile || !jobDescription || !strategy) throw new HttpsError('invalid-argument', 'careerProfile, jobDescription, and strategy are required.');
 
     // Spend 1 credit for build
@@ -1234,7 +1237,7 @@ JOB TITLE: ${jobDescription.title || ''}`;
     let styleDirectives = [];
     let bulletTemplates = [];
     if (domainId) {
-      ({ directives: styleDirectives, bulletTemplates } = await loadDomainContent(domainId));
+      ({ directives: styleDirectives, bulletTemplates } = await loadDomainContent(domainId, subDomainId));
     }
 
     // Contact facts are assembled here rather than left to the model, so the
@@ -1480,6 +1483,24 @@ Weave each missing requirement into a real accomplishment bullet or the summary 
     }
 
     return { versionId, matchScore, creditsRemaining: remainingAfterSpend };
+  }
+
+  // ---- TASK: publicSubDomains — published specialities for a published domain ----
+  // Any signed-in user may call this; it returns names only, never the skills,
+  // bullet templates or instructions behind them.
+  if (task === 'publicSubDomains') {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+    const { domainId } = payload || {};
+    if (!domainId) return { subDomains: [] };
+    const domSnap = await db.collection('domains').doc(domainId).get();
+    if (!domSnap.exists || domSnap.data().status !== 'published') return { subDomains: [] };
+    const snap = await db.collection('domains').doc(domainId).collection('subDomains')
+      .where('status', '==', 'published').get();
+    const subDomains = snap.docs
+      .map(d => ({ id: d.id, name: d.data().name, description: d.data().description || '', sortOrder: d.data().sortOrder || 0 }))
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(({ sortOrder, ...rest }) => rest);
+    return { subDomains };
   }
 
   // ---- TASK: domainAdmin — CRUD for domains (admin-only) ----

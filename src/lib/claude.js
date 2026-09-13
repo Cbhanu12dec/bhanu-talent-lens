@@ -92,14 +92,19 @@ export async function parseJobDescription(jobDescriptionId, rawText) {
   return parsed;
 }
 
-export async function analyzeAgentRun({ agentRunId, careerProfile, jobDescription, domainId }) {
-  const { strategy } = await agentProxy('agentAnalyze', { agentRunId, careerProfile, jobDescription, domainId });
+export async function listPublicSubDomains(domainId) {
+  const { subDomains } = await agentProxy('publicSubDomains', { domainId });
+  return subDomains;
+}
+
+export async function analyzeAgentRun({ agentRunId, careerProfile, jobDescription, domainId, subDomainId }) {
+  const { strategy } = await agentProxy('agentAnalyze', { agentRunId, careerProfile, jobDescription, domainId, subDomainId });
   return strategy;
 }
 
-export async function buildAgentResume({ agentRunId, careerProfile, jobDescription, strategy, domainId, previousResume }) {
+export async function buildAgentResume({ agentRunId, careerProfile, jobDescription, strategy, domainId, subDomainId, previousResume }) {
   try {
-    const { versionId, matchScore, creditsRemaining } = await agentProxy('agentBuild', { agentRunId, careerProfile, jobDescription, strategy, domainId, previousResume });
+    const { versionId, matchScore, creditsRemaining } = await agentProxy('agentBuild', { agentRunId, careerProfile, jobDescription, strategy, domainId, subDomainId, previousResume });
     return { versionId, matchScore, creditsRemaining };
   } catch (err) {
     if (err?.code === 'functions/resource-exhausted') {
