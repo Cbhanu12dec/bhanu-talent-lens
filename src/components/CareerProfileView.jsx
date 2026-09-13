@@ -8,6 +8,7 @@ import {
   updateProfileDetails,
 } from '../lib/firestore.js';
 import Modal from './Modal.jsx';
+import PageHero from './PageHero.jsx';
 
 const PROFILE_NAME_IDEAS = ['Full Stack roles', 'Program Manager roles', 'Data / ML roles', 'Early-career roles'];
 
@@ -309,6 +310,19 @@ export default function CareerProfileView({ uid, notify }) {
           </div>
           <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={() => setNewProfileOpen(true)}>+ New Profile</button>
         </div>
+
+        <PageHero
+          glyph="◈"
+          title="Record your real career once, and every resume is built from it"
+          lead="A Career Profile holds the facts about your working life: the roles you held, when you held them, what you actually delivered, plus your education, certifications and skills. The agent may only use what it finds here — it will never invent an employer, a date or a number. That is what keeps a generated resume truthful enough to defend in an interview."
+          steps={[
+            { title: 'Add your details', text: 'name, phone, email and profile links. These are copied onto every resume exactly as written.' },
+            { title: 'Add each role', text: 'employer, title and dates, then the projects and results behind it. Real numbers here become the metrics in your bullets.' },
+            { title: 'Add education and skills', text: 'degrees, certifications and the tools you genuinely work with.' },
+            { title: 'Generate', text: 'open Tailor Resume, choose "Build from scratch", and a resume is written from this profile for whatever job you paste.' },
+          ]}
+          footnote="You can keep several profiles — say one for engineering roles and one for management — and pick which to build from each time."
+        />
 
         <div className="profile-grid">
           {profiles.map(p => {

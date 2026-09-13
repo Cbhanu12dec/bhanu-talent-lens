@@ -1,20 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { listCareerProfiles } from '../lib/firestore.js';
 
-function fmtDate(ts) {
-  const d = ts?.toDate ? ts.toDate() : ts ? new Date(ts) : null;
-  return d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
-}
-
-function completenessOf(p) {
-  if (!p) return 0;
-  return Math.min(
-    ((p.experience?.length > 0 ? 40 : 0) +
-     (p.education?.length > 0 ? 25 : 0) +
-     ((p.skills?.length || 0) >= 3 ? 20 : 0) +
-     (p.experience?.length > 1 ? 15 : 0)), 100);
-}
-
 // Every recommendation carries a reason and exactly one CTA (§6).
 function buildRecommendations({ profile, resumes, activeResume, setView }) {
   const recs = [];
@@ -84,17 +70,10 @@ export default function DashboardOverview({ uid, state, setView }) {
 
   const profile = profiles.find(p => p.id === activeProfileId) || null;
   const activeResume = resumes.find(r => r.id === activeResumeId) || resumes[0] || null;
-  const completeness = completenessOf(profile);
   const firstName = profileInfo?.name ? profileInfo.name.split(' ')[0] : null;
 
   const recs = buildRecommendations({ profile, resumes, activeResume, setView });
   const isNewUser = !resumes.length && !(profile?.experience?.length);
-
-  const activity = resumes.slice(0, 5).map(r => ({
-    id: r.id,
-    day: fmtDate(r.createdAt),
-    text: `${r.label} added to your library`,
-  }));
 
   if (isNewUser) {
     return (
@@ -133,119 +112,71 @@ export default function DashboardOverview({ uid, state, setView }) {
         <div className="hero-glyph">✦</div>
       </div>
 
-      <div className="dash-two-col">
-        <div>
-          <div className="card" style={{ padding: 22, marginBottom: 18 }}>
-            <div className="panel-head">
-              <h2>Career Profile</h2>
-              <a style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }} onClick={() => setView('careerprofile')}>Open →</a>
-            </div>
+      <FlowGuide setView={setView} />
+    </section>
+  );
+}
 
-            {profiles.length > 1 && (
-              <div className="chip-row" style={{ marginBottom: 14 }}>
-                {profiles.map(p => (
-                  <button key={p.id}
-                    className={`profile-chip-sel${p.id === activeProfileId ? ' selected' : ''}`}
-                    onClick={() => setActiveProfileId(p.id)}>
-                    {p.name}
-                  </button>
-                ))}
+// The dashboard's job is to make the two ways of producing a resume obvious.
+function FlowGuide({ setView }) {
+  const flows = [
+    {
+      glyph: '✦',
+      name: 'Build from scratch',
+      when: 'You have no resume to start from, or you want one written specifically for this role.',
+      lead: 'Writes a brand-new resume from your Career Profile. Nothing is carried over from an old document, so the structure and wording are shaped around the job you are applying for.',
+      steps: [
+        'Pick the Career Profile to build from — every fact in the resume comes from it, and nothing outside it can be claimed.',
+        'Choose the target domain and speciality, for example Banking → Software Engineering. That loads the industry vocabulary and the writing rules for that role.',
+        'Paste the job description.',
+        'The agent writes the resume, scores it against the posting, and rewrites anything it left uncovered.',
+      ],
+      cta: 'Build from scratch',
+    },
+    {
+      glyph: '▤',
+      name: 'Tailor an existing resume',
+      when: 'Your resume is already solid and just needs pointing at a particular job.',
+      lead: 'Starts from a resume in your library and rewrites it against one specific job description, keeping the structure you already trust while re-pointing the language.',
+      steps: [
+        'Pick a resume from your library as the base.',
+        'Choose how far the rewrite should go, from light touch-ups to a full rework.',
+        'Paste the job description.',
+        'Review a before and after comparison of what changed, then export.',
+      ],
+      cta: 'Tailor existing',
+    },
+  ];
+
+  return (
+    <section className="flow-guide">
+      <h2 className="flow-guide-title">Two ways to get a resume</h2>
+      <p className="flow-guide-sub">Both start from a job description and end with an ATS-scored resume you can download. The difference is what they build from.</p>
+
+      <div className="flow-cards">
+        {flows.map(f => (
+          <article className="flow-card" key={f.name}>
+            <div className="flow-card-head">
+              <span className="flow-card-glyph" aria-hidden="true">{f.glyph}</span>
+              <div>
+                <h3 className="flow-card-name">{f.name}</h3>
+                <p className="flow-card-when">{f.when}</p>
               </div>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--navy)', fontFamily: 'var(--display)' }}>
-                {profile?.name || 'Primary Profile'}
-              </span>
-              {profile?.isDefault && <span className="badge badge-primary">PRIMARY</span>}
             </div>
-            <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 14 }}>
-              {profile?.experience?.[0]?.title || 'Add a role to set your tagline'}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-              <span style={{ color: 'var(--ink-2)' }}>Profile completeness</span>
-              <span style={{ fontWeight: 700, color: 'var(--navy)' }}>{completeness}%</span>
-            </div>
-            <div className="progress-bar" style={{ height: 8 }}>
-              <div className="progress-fill" style={{ width: `${completeness}%`, height: '100%' }} />
-            </div>
-
-            <div className="dash-stat-row">
-              <div className="dash-stat"><b>{profile?.experience?.length || 0}</b>Experience</div>
-              <div className="dash-stat"><b>{profile?.education?.length || 0}</b>Education</div>
-              <div className="dash-stat"><b>{profile?.skills?.length || 0}</b>Skills</div>
-              <div className="dash-stat"><b>{profile?.projects?.length || 0}</b>Projects</div>
-              <div className="dash-stat"><b>{profile?.certifications?.length || 0}</b>Certifications</div>
-            </div>
-          </div>
-
-          {/* Same data as Resume Library, not a separate metrics concept (§3). */}
-          <div className="card" style={{ padding: 22 }}>
-            <div className="panel-head">
-              <h2>Your resumes</h2>
-              <a style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }} onClick={() => setView('resumes')}>View all →</a>
-            </div>
-            {resumes.length === 0 ? (
-              <div className="empty">No resumes yet.</div>
-            ) : resumes.slice(0, 5).map(r => (
-              <div className="lib-row" key={r.id} style={{ padding: '12px 0' }}>
-                <div className="lib-body">
-                  <div className="lib-name">
-                    {r.label}
-                    {r.id === activeResumeId && <span className="badge badge-primary">Default</span>}
-                  </div>
-                  <div className="lib-meta">
-                    {r.atsScore ? `ATS ${r.atsScore}% · ` : ''}Updated {fmtDate(r.createdAt)}
-                  </div>
-                </div>
-                <div className="lib-actions">
-                  <button className="btn btn-sm" onClick={() => setView('resumes')}>Open</button>
-                  <button className="btn btn-sm btn-primary" onClick={() => setView('agent')}>Tailor →</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="card" style={{ padding: 22, marginBottom: 18 }}>
-            <div className="panel-head"><h2>Recommended for you</h2></div>
-            {recs.length === 0 ? (
-              <div className="empty">Nothing needs your attention right now.</div>
-            ) : recs.map(rec => (
-              <div className="rec-card" key={rec.id}>
-                <span className={`badge badge-${rec.tone === 'danger' ? 'danger' : rec.tone === 'warning' ? 'warning' : 'primary'}`}>
-                  {rec.level}
-                </span>
-                <div className="rec-title">{rec.title}</div>
-                <div className="rec-reason">{rec.reason}</div>
-                <button className="btn btn-sm btn-primary" onClick={rec.run}>{rec.cta}</button>
-              </div>
-            ))}
-          </div>
-
-          <div className="card" style={{ padding: 22 }}>
-            <div className="panel-head">
-              <h2>Recent activity</h2>
-              <a style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }} onClick={() => setView('resumes')}>View all →</a>
-            </div>
-            {activity.length === 0 ? (
-              <div className="empty">No activity yet.</div>
-            ) : (
-              <div className="activity-list">
-                {activity.map(a => (
-                  <div className="activity-item" key={a.id}>
-                    <span className="activity-dot" />
-                    <span className="activity-day">{a.day}</span>
-                    <span className="activity-text">{a.text}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+            <p className="flow-card-lead">{f.lead}</p>
+            <ol className="flow-card-steps">
+              {f.steps.map((s, i) => (
+                <li key={i}><span className="flow-step-n">{i + 1}</span><span>{s}</span></li>
+              ))}
+            </ol>
+            <button className="btn btn-primary flow-card-cta" onClick={() => setView('agent')}>{f.cta} →</button>
+          </article>
+        ))}
       </div>
+
+      <p className="flow-guide-foot">
+        Either way the agent only uses facts it can find in your Career Profile or your existing resume. It will not invent an employer, a date, or a metric to fit the posting.
+      </p>
     </section>
   );
 }

@@ -943,6 +943,68 @@ html[data-theme="dark"] .doc,html[data-theme="dark"] .paper{background:var(--car
 
 .page-header{margin-bottom:20px;}
 
+/* ---- Explainer blocks: page intros and the dashboard's two-flow guide ---- */
+.page-hero{
+  background:linear-gradient(135deg,#EAF2FF,#F7FBFF);
+  border-radius:var(--r-card);padding:22px 24px;margin-bottom:22px;
+  box-shadow:0 14px 34px rgba(20,121,255,.12);
+}
+.page-hero-main{display:flex;gap:16px;align-items:flex-start;}
+.page-hero-glyph{
+  flex:none;width:50px;height:50px;border-radius:14px;background:var(--card);
+  display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--brand);
+  box-shadow:0 6px 14px var(--brand-shadow);
+}
+.page-hero-copy{min-width:0;}
+.page-hero-title{font-family:var(--display);font-size:18px;font-weight:700;color:var(--navy);margin:0 0 6px;line-height:1.35;}
+.page-hero-lead{font-size:13.4px;line-height:1.7;color:var(--ink-2);margin:0;max-width:88ch;}
+.page-hero-steps{
+  list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+  gap:11px 22px;margin:18px 0 0;padding:0;
+}
+.page-hero-steps li{display:flex;gap:9px;align-items:flex-start;font-size:12.7px;line-height:1.6;color:var(--ink-2);}
+.page-hero-steps b{color:var(--navy);font-weight:650;}
+.page-hero-step-n{
+  flex:none;width:20px;height:20px;border-radius:50%;background:var(--brand);color:#fff;
+  font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px;
+  box-shadow:0 4px 10px var(--brand-shadow);
+}
+.page-hero-foot{margin:15px 0 0;font-size:12.3px;line-height:1.6;color:var(--ink-3);}
+
+.flow-guide{margin-top:6px;}
+.flow-guide-title{font-family:var(--display);font-size:17px;font-weight:700;color:var(--navy);margin:0 0 5px;}
+.flow-guide-sub{font-size:13.2px;color:var(--ink-2);margin:0 0 16px;max-width:80ch;line-height:1.6;}
+.flow-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;}
+.flow-card{
+  background:var(--card);border-radius:var(--r-card);padding:22px;
+  box-shadow:0 10px 26px var(--navy-shadow);display:flex;flex-direction:column;
+}
+.flow-card-head{display:flex;gap:13px;align-items:flex-start;margin-bottom:12px;}
+.flow-card-glyph{
+  flex:none;width:42px;height:42px;border-radius:12px;background:var(--brand-soft);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;font-size:19px;
+}
+.flow-card-name{font-family:var(--display);font-size:16px;font-weight:700;color:var(--navy);margin:0 0 3px;}
+.flow-card-when{font-size:12.2px;color:var(--ink-3);margin:0;line-height:1.5;}
+.flow-card-lead{font-size:13px;line-height:1.65;color:var(--ink-2);margin:0 0 14px;}
+.flow-card-steps{list-style:none;margin:0 0 18px;padding:0;display:flex;flex-direction:column;gap:9px;}
+.flow-card-steps li{display:flex;gap:9px;align-items:flex-start;font-size:12.6px;line-height:1.6;color:var(--ink-2);}
+.flow-step-n{
+  flex:none;width:19px;height:19px;border-radius:50%;background:var(--navy-soft);color:var(--navy);
+  font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px;
+}
+.flow-card-cta{margin-top:auto;align-self:flex-start;}
+.flow-guide-foot{margin:18px 0 0;font-size:12.4px;line-height:1.6;color:var(--ink-3);max-width:90ch;}
+
+/* Inline explainer inside the agent's option blocks */
+.ws-explain{
+  margin-top:12px;background:var(--brand-soft);border-radius:10px;padding:11px 13px;
+  font-size:12.3px;line-height:1.6;color:var(--ink-2);
+}
+.ws-explain b{color:var(--navy);}
+.ws-explain ul{margin:8px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:6px;}
+.opt-intro{font-size:12.3px;line-height:1.6;color:var(--ink-2);margin:0 0 10px;}
+
 .profile-switcher-btn{
   all:unset;display:flex;align-items:center;gap:12px;width:100%;max-width:520px;
   padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);

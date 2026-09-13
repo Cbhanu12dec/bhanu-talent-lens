@@ -6,6 +6,7 @@ import {
   updateResumePrompts, updateResumeAtsTarget
 } from '../lib/firestore.js';
 import Modal from './Modal.jsx';
+import PageHero from './PageHero.jsx';
 import { buildResumePdf, downloadBlob } from '../lib/pdf.js';
 import { buildResumeDocx } from '../lib/docx.js';
 
@@ -168,6 +169,19 @@ export default function ResumeLibraryView({ uid, state, setView, notify }) {
         </div>
         <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={() => setAddOpen(true)}>⇧ Add Resume</button>
       </div>
+
+      <PageHero
+        glyph="▤"
+        title="Keep your existing resumes here, then tailor them to any job"
+        lead="This is the home for resumes you already have. Store one and you can re-target it again and again: for each new job you paste the job description, and the agent rewrites your resume against it, pulling in the wording that posting actually asks for. Your original is never overwritten, so every application keeps its own version."
+        steps={[
+          { title: 'Add a resume', text: 'upload a PDF or Word file, or paste the text straight in.' },
+          { title: 'Set a default', text: 'the one the workspace starts from when you begin a new tailoring run.' },
+          { title: 'Tailor it', text: 'open Tailor Resume, choose "Tailor existing", pick this resume and paste the job description.' },
+          { title: 'Review and export', text: 'check the ATS match score and the highlighted keywords, then download as PDF or Word.' },
+        ]}
+        footnote="No existing resume to start from? Use Build from scratch instead and the agent will write one from your Career Profile."
+      />
 
       {resumes.length === 0 ? (
         <div className="es-card">

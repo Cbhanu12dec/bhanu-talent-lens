@@ -762,8 +762,13 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
                   </div>
                 </div>
               ) : (
-                <div className="field-hint" style={{ marginTop: 12 }}>
-                  Building from scratch uses your <strong>Career Profile</strong> as the only source of facts. No base resume needed.
+                <div className="ws-explain">
+                  <b>Build from scratch</b> writes a new resume from three inputs, with no base document involved:
+                  <ul>
+                    <li><b>Your Career Profile</b> — the only source of facts. Employers, dates, achievements and skills all come from here, and nothing outside it can be claimed.</li>
+                    <li><b>Domain and speciality</b> — sets the industry vocabulary and the writing rules the agent follows, so a banking resume reads like banking.</li>
+                    <li><b>The job description</b> — decides what gets emphasised and which keywords must appear.</li>
+                  </ul>
                 </div>
               )}
             </OptBlock>
@@ -795,6 +800,11 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
             {/* ---- Target domain (scratch only) ---- */}
             {mode === 'scratch' && (
               <OptBlock title="Target domain" summary={selectedDomain ? (selectedSubDomain ? `${selectedDomain.name} · ${selectedSubDomain.name}` : selectedDomain.name) : undefined}>
+                <p className="opt-intro">
+                  The domain decides how your resume is written: which industry terms the agent reaches for,
+                  and which rules it follows about what may and may not be claimed. Narrow it with a speciality
+                  to match your actual role.
+                </p>
                 <input className="domain-search" type="text" placeholder="Search domains…" value={domainQuery} onChange={e => setDomainQuery(e.target.value)} />
                 {filteredDomains.length > 0 ? (
                   <div className="domain-list">
