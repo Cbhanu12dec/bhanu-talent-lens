@@ -216,6 +216,10 @@ input,textarea,select{font-family:inherit;font-size:14px;}
 
 /* ============================================================ TOPBAR */
 .topbar-title{font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--ink);}
+.topbar-brand{display:flex;align-items:center;gap:12px;min-width:0;}
+.topbar-logo{background:none;border:none;padding:0;cursor:pointer;display:flex;border-radius:10px;line-height:0;}
+.topbar-logo:focus-visible{outline:2px solid var(--brand);outline-offset:3px;}
+.topbar-sep{width:1px;height:22px;background:var(--border);flex:none;}
 .topbar-right{display:flex;align-items:center;gap:12px;position:relative;}
 .search-box,.cmdk-trigger{
   display:flex;align-items:center;gap:8px;background:var(--surface-sunken);border:none;

@@ -1,25 +1,28 @@
 import React from 'react';
 
-export default function Logo({ size = 38 }) {
+// Single brand mark, used in the sidebar, topbar and on the login screen.
+// The `id` suffix keeps gradient ids unique when several render at once.
+export default function Logo({ size = 38, id = 'a' }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" style={{ flex: 'none' }}>
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" style={{ flex: 'none' }} aria-hidden="true">
       <defs>
-        <linearGradient id="tl-lg-purple" x1="0" y1="0" x2="40" y2="40">
-          <stop offset="0" stopColor="#4E8C88" />
-          <stop offset="1" stopColor="#183B3A" />
-        </linearGradient>
-        <linearGradient id="tl-lg-gold" x1="10" y1="4" x2="30" y2="18">
-          <stop offset="0" stopColor="#FFF1C7" />
-          <stop offset="1" stopColor="#D9B25C" />
+        <linearGradient id={`rcp-bg-${id}`} x1="4" y1="2" x2="36" y2="38">
+          <stop offset="0" stopColor="#57A4FF" />
+          <stop offset="1" stopColor="#1170F0" />
         </linearGradient>
       </defs>
-      <path d="M20 3 L33 8 V18 C33 27 27.5 33 20 36.5 C12.5 33 7 27 7 18 V8 Z" fill="rgba(40,96,93,0.10)" stroke="url(#tl-lg-purple)" strokeWidth="2" />
-      <path d="M13 9.5 L15.6 13 L20 7 L24.4 13 L27 9.5 V14.5 H13 Z" fill="url(#tl-lg-gold)" />
-      <circle cx="15.6" cy="10" r="1.05" fill="url(#tl-lg-gold)" />
-      <circle cx="20" cy="8" r="1.05" fill="url(#tl-lg-gold)" />
-      <circle cx="24.4" cy="10" r="1.05" fill="url(#tl-lg-gold)" />
-      <path d="M20 19 L25.2 23.4 L20 30.5 L14.8 23.4 Z" fill="rgba(40,96,93,0.12)" stroke="url(#tl-lg-purple)" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M17.2 21.2 L22.8 21.2 M16.2 23.4 L23.8 23.4" stroke="url(#tl-lg-purple)" strokeWidth="0.9" opacity="0.7" />
+      <rect x="2" y="2" width="36" height="36" rx="11" fill={`url(#rcp-bg-${id})`} />
+
+      {/* résumé page */}
+      <rect x="11" y="9.5" width="17.5" height="21.5" rx="3" fill="#fff" />
+      <path d="M14.5 15.5h7M14.5 19.5h9M14.5 23.5h6"
+        stroke="#1170F0" strokeWidth="1.8" strokeLinecap="round" opacity=".5" />
+
+      {/* spark, echoing the ✦ used for credits and the dashboard hero. Filled
+          blue so it reads on the white page, white-outlined where it crosses
+          onto the badge. */}
+      <path d="M27 21.5 l1.9 4.3 l4.3 1.9 l-4.3 1.9 l-1.9 4.3 l-1.9 -4.3 l-4.3 -1.9 l4.3 -1.9 z"
+        fill={`url(#rcp-bg-${id})`} stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
     </svg>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import Logo from './Logo.jsx';
 
 const TITLES = {
   dashboard: 'Dashboard',
@@ -37,7 +38,13 @@ export default function Topbar({ view, setView, credits, notifications }) {
 
   return (
     <div className="topbar">
-      <div className="topbar-title">{TITLES[view] || 'ResumeCraftPro'}</div>
+      <div className="topbar-brand">
+        <button className="topbar-logo" onClick={() => setView('dashboard')} aria-label="ResumeCraftPro home" title="Go to dashboard">
+          <Logo size={28} id="top" />
+        </button>
+        <span className="topbar-sep" />
+        <div className="topbar-title">{TITLES[view] || 'ResumeCraftPro'}</div>
+      </div>
 
       <div className="topbar-right">
         {/* Search trigger */}

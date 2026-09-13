@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import Logo from './Logo.jsx';
 
 const WORKSPACE_NAV = [
   { key: 'dashboard',    icon: '▦', label: 'Dashboard' },
@@ -63,7 +64,7 @@ export default function Sidebar({ view, setView, resumeCount, credits, creditsMa
     <aside className="side">
       {/* Brand */}
       <div className="logo">
-        <div className="logo-mark" style={{ fontSize: 13 }}>RC</div>
+        <Logo size={32} id="side" />
         <div className="logo-text">
           <span className="name">ResumeCraftPro</span>
         </div>
