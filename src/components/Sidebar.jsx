@@ -4,7 +4,7 @@ import Logo from './Logo.jsx';
 
 const WORKSPACE_NAV = [
   { key: 'dashboard',    icon: '▦', label: 'Dashboard' },
-  { key: 'agent',        icon: '✦', label: 'Tailor Resume', badge: 'NEW' },
+  { key: 'agent',        icon: '✦', label: 'Tailor Resume' },
 ];
 const LIBRARY_NAV = [
   { key: 'resumes',      icon: '▤', label: 'Resumes' },
@@ -15,7 +15,7 @@ const ACCOUNT_NAV = [
   { key: 'settings', icon: '⚙', label: 'Settings' },
 ];
 const ADMIN_NAV = [
-  { key: 'domainlibrary', icon: '▤', label: 'Domain Library', badge: 'NEW' },
+  { key: 'domainlibrary', icon: '▤', label: 'Domain Library' },
   { key: 'admin', icon: '🛡', label: 'Admin Console', badge: 'ADMIN', adminBadge: true },
 ];
 

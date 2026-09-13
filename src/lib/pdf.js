@@ -114,11 +114,15 @@ export function buildResumePdf(resume, title = 'Resume') {
         y += 13;
       }
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...TEXT);
+      // Bullets sit inset from the role heading, with wrapped lines aligned
+      // under the first line rather than back at the margin.
+      const bulletX = marginX + 12;
+      const bulletTextX = marginX + 24;
       (entry.bullets || []).forEach(b => {
-        const wrapped = doc.splitTextToSize(b, contentWidth - 14);
+        const wrapped = doc.splitTextToSize(b, contentWidth - 24);
         ensureSpace(wrapped.length * 13 + 2);
-        doc.text('•', marginX + 2, y);
-        wrapped.forEach((line, i) => { doc.text(line, marginX + 14, y); y += 13; });
+        doc.text('\u2022', bulletX, y);
+        wrapped.forEach(line => { doc.text(line, bulletTextX, y); y += 13; });
       });
       if (entry.footer) {
         doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(...MUTED);

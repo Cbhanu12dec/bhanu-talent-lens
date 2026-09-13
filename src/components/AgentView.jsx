@@ -551,10 +551,14 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   }
 
   /* ============================= SHARED: REVIEW / EXPORT ============================= */
+  // Exported files are named name_role_company so a folder of applications
+  // stays sortable by candidate and target.
   function exportTitle() {
-    return mode === 'scratch'
-      ? `${jobDescription?.title || 'Resume'}_${jobDescription?.company || ''}`
-      : `${baseResume?.label || 'Resume'}_Tailored`;
+    const name = version?.content?.name || profile?.details?.fullName || profileInfo?.name || '';
+    const role = jobDescription?.title || (mode === 'existing' ? baseResume?.label : '') || 'Resume';
+    const company = jobDescription?.company || '';
+    const parts = [name, role, company].map(s => String(s || '').trim()).filter(Boolean);
+    return parts.join('_') || 'Resume';
   }
 
   function handleDownload(format) {

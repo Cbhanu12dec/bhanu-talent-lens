@@ -1,6 +1,6 @@
 import {
   Document, Packer, Paragraph, TextRun, AlignmentType,
-  BorderStyle, TabStopType, ExternalHyperlink
+  BorderStyle, TabStopType, ExternalHyperlink, Tab
 } from 'docx';
 import { splitContact } from './contactLinks.js';
 
@@ -52,10 +52,13 @@ function paragraphsForEntry(entry) {
     }));
   }
   (entry.bullets || []).forEach(b => {
+    // left 648 / hanging 360 twips: glyph at 0.25in, text at 0.45in. The Tab
+    // element is required — docx strips a raw \t from run text, which would
+    // leave the glyph jammed against the first word.
     out.push(new Paragraph({
-      indent: { left: 400, hanging: 400 },
+      indent: { left: 648, hanging: 360 },
       spacing: { after: 60 },
-      children: [new TextRun(`•  ${b}`)]
+      children: [new TextRun({ children: ['\u2022', new Tab(), b] })]
     }));
   });
   if (entry.footer) {
