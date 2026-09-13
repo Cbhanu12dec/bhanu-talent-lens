@@ -518,6 +518,7 @@ tbody tr:hover{background:var(--bg);}
 .doc,.doc-wrap > div{font-family:var(--sans);font-size:12px;color:var(--text-secondary);padding:24px 28px;background:var(--paper);}
 .doc h4{font-size:16px;font-weight:700;color:var(--text);margin-bottom:3px;text-align:center;}
 .doc .contact-line{font-size:11px;color:var(--text-muted);margin-bottom:16px;text-align:center;}
+.doc .contact-line a{color:#1155CC;text-decoration:underline;}
 .doc .sect{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--primary);text-transform:uppercase;margin:14px 0 5px;border-bottom:1px solid var(--border);padding-bottom:4px;}
 .doc p{margin:0 0 6px;line-height:1.55;}
 .doc p strong{color:var(--text);font-weight:600;}

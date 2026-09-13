@@ -21,6 +21,38 @@ const ADMIN_EMAILS = ['cbhanu12dec@gmail.com'];
 function isAdmin(request) {
   return !!request.auth?.token?.email && ADMIN_EMAILS.includes(request.auth.token.email);
 }
+// Total professional experience, merged so overlapping roles aren't double
+// counted. Computed here rather than left to the model, which otherwise
+// guesses a round number that the dates don't support.
+function totalExperienceYears(experience = []) {
+  const spans = experience.map(e => {
+    const start = Date.parse(e.startDate || '');
+    if (Number.isNaN(start)) return null;
+    const end = /present|current/i.test(String(e.endDate || '')) || !e.endDate
+      ? Date.now()
+      : Date.parse(e.endDate);
+    return Number.isNaN(end) || end < start ? null : [start, end];
+  }).filter(Boolean).sort((a, b) => a[0] - b[0]);
+  if (!spans.length) return 0;
+
+  const merged = [];
+  let [curStart, curEnd] = spans[0];
+  for (const [s, e] of spans.slice(1)) {
+    if (s <= curEnd) curEnd = Math.max(curEnd, e);
+    else { merged.push([curStart, curEnd]); [curStart, curEnd] = [s, e]; }
+  }
+  merged.push([curStart, curEnd]);
+
+  // Counted in calendar months: a fixed 365.25-day year drifts by a leap day
+  // and reports a clean 9-year history as 8.
+  const months = merged.reduce((sum, [s, e]) => {
+    const a = new Date(s), b = new Date(e);
+    return sum + (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
+      + (b.getDate() >= a.getDate() ? 0 : -1);
+  }, 0);
+  return Math.max(0, Math.floor(months / 12));
+}
+
 function requireAdmin(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
   if (!isAdmin(request)) throw new HttpsError('permission-denied', 'Admin access required.');
@@ -33,17 +65,22 @@ function requireAdmin(request) {
 // When `subDomainId` is given, domain-wide items still apply; only *other*
 // sub-domains' content is excluded.
 async function loadDomainContent(domainId, subDomainId = null) {
-  const empty = { vocab: [], directives: [], bulletTemplates: [] };
+  const empty = { vocab: [], directives: [], bulletTemplates: [], label: '' };
   if (!domainId) return empty;
   const ref = db.collection('domains').doc(domainId);
   const snap = await ref.get();
   if (!snap.exists) return empty;
 
   const d = snap.data();
+  let label = d.name || '';
+  if (subDomainId) {
+    const sub = await ref.collection('subDomains').doc(subDomainId).get();
+    if (sub.exists) label = sub.data().name || label;
+  }
   const legacyVocab = (d.categories || []).flatMap(c => c.skills || []).map(s => s.label).filter(Boolean);
   const legacyDirectives = (d.categories || []).flatMap(c => c.strongPoints || []).map(sp => sp.text).filter(Boolean);
   if (legacyVocab.length || legacyDirectives.length) {
-    return { vocab: legacyVocab, directives: legacyDirectives, bulletTemplates: [] };
+    return { vocab: legacyVocab, directives: legacyDirectives, bulletTemplates: [], label };
   }
 
   const inScope = data => !data.subDomainId || !subDomainId || data.subDomainId === subDomainId;
@@ -58,6 +95,7 @@ async function loadDomainContent(domainId, subDomainId = null) {
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
       .map(i => i.instruction).filter(Boolean),
     bulletTemplates: bullets.docs.map(b => b.data()).filter(inScope).map(b => b.text).filter(Boolean),
+    label,
   };
 }
 
@@ -1236,8 +1274,9 @@ JOB TITLE: ${jobDescription.title || ''}`;
     // Load domain style directives server-side
     let styleDirectives = [];
     let bulletTemplates = [];
+    let domainLabel = '';
     if (domainId) {
-      ({ directives: styleDirectives, bulletTemplates } = await loadDomainContent(domainId, subDomainId));
+      ({ directives: styleDirectives, bulletTemplates, label: domainLabel } = await loadDomainContent(domainId, subDomainId));
     }
 
     // Contact facts are assembled here rather than left to the model, so the
@@ -1269,6 +1308,7 @@ JOB TITLE: ${jobDescription.title || ''}`;
         name: c.name, issuer: c.issuer, issueDate: c.issueDate, expiryDate: c.expiryDate,
       })),
       skills: (careerProfile.skills || []).map(s => s.label),
+      yearsExperience: totalExperienceYears(careerProfile.experience || []),
     };
 
     const criticalReqs = (jobDescription.requirements || []).filter(r => ['Critical', 'High'].includes(r.importance)).map(r => r.name).join(', ');
@@ -1308,6 +1348,14 @@ Never use em dashes or en dashes anywhere in the output. Use commas, colons, or 
 IDENTITY - use the ground truth verbatim
 The "personal" block in the ground truth holds the candidate's real name and contact details. Copy "fullName" into "name" exactly as written. Build "contact" from the phone, email, linkedin, github, portfolio and location that are present, pipe-separated, in that order. Never invent, abbreviate, or omit a contact field that was provided, and never substitute a placeholder like "Candidate Name" or "email@example.com".
 
+PROFESSIONAL SUMMARY - describe the candidate, not the job
+The summary is the one section that must read as a truthful account of who this person is. It is not a restatement of the job posting.
+- Open with the candidate's real seniority and total experience using the "yearsExperience" number from the ground truth, in the form "X+ years" - for example "Senior Data Engineer with 9+ years of experience across banking and payments platforms". Use that number only. Never round it up, never invent one, and if it is 0 or missing, omit the years clause entirely rather than guessing.
+- Name the domain or speciality supplied as TARGET DOMAIN when one is given, so the summary positions the candidate inside that field.
+- Every claim must be traceable to the ground truth: real employers, real systems, real scale. Do not assert familiarity with a tool, platform, or regulation that appears only in the job description.
+- Do not copy sentences or distinctive phrases from the job description into the summary, and never describe the role's responsibilities as though they were the candidate's past work.
+- Aim for 2-3 sentences: who they are and how long, what they have actually built or led with a concrete anchor, then the value they bring to this kind of role.
+
 KEYWORD COVERAGE - hard requirement, not a stylistic suggestion
 The user message lists KEYWORDS TO COVER drawn from this JD. Every one of them that the ground truth truthfully supports must appear in the resume using the JD's own wording, at least once. Placement priority: Professional Summary and the most recent role first, then Technical Skills, then earlier roles. Work them in as part of real accomplishments, never as a keyword list bolted onto the end. Omit only the ones the candidate genuinely has no evidence for, and do not stretch a claim to fit a keyword.
 
@@ -1338,6 +1386,8 @@ ${JSON.stringify(groundTruth, null, 2)}
 
 TARGET ROLE: ${jobDescription.title || 'Target Role'}
 COMPANY: ${jobDescription.company || ''}
+${domainLabel ? `TARGET DOMAIN: ${domainLabel}` : ''}
+YEARS OF EXPERIENCE (computed from the ground truth dates, use verbatim): ${groundTruth.yearsExperience || 'unknown'}
 CRITICAL REQUIREMENTS: ${criticalReqs}
 KEYWORDS TO COVER (use each one's exact wording at least once wherever the ground truth truthfully supports it): ${allReqTerms.join(', ')}
 PRIORITY EMPLOYERS TO LEAD WITH: ${priorityEmployers || 'all'}
@@ -1457,6 +1507,14 @@ Weave each missing requirement into a real accomplishment bullet or the summary 
     }
 
     // Persist the version
+    // Highlights are derived from the finished text rather than the strategy's
+    // wish-list, so every term is guaranteed to actually be present to mark up.
+    const finalText = resumeToPlainText(content).toLowerCase();
+    content.highlights = allReqTerms
+      .filter(t => t.length > 2 && finalText.includes(t.toLowerCase()))
+      .sort((a, b) => b.length - a.length)
+      .slice(0, 24);
+
     const versionId = 'rv_' + Date.now();
     const versionData = {
       id: versionId, agentRunId: agentRunId || null,

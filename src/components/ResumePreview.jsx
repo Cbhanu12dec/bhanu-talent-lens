@@ -9,12 +9,17 @@ function escapeRegExp(s) {
 // phrases) in <mark>, splitting the text into plain/mark segments.
 function highlightText(text, terms) {
   if (!terms || terms.length === 0) return text;
-  const escaped = terms.map(escapeRegExp).filter(Boolean);
+  // Longest first: regex alternation is leftmost-first, so "Java" listed before
+  // "JavaScript" would otherwise chop "JavaScript" into "Java" + "Script".
+  const ordered = [...new Set(terms.filter(Boolean))].sort((a, b) => b.length - a.length);
+  const escaped = ordered.map(escapeRegExp);
   if (escaped.length === 0) return text;
-  const re = new RegExp(`(${escaped.join('|')})`, 'gi');
-  const parts = text.split(re);
+  // Word-boundary guards stop a term matching inside a larger word.
+  const re = new RegExp(`(?<![\\w])(${escaped.join('|')})(?![\\w])`, 'gi');
+  const parts = String(text).split(re);
+  const lower = new Set(ordered.map(t => t.toLowerCase()));
   return parts.map((part, i) =>
-    terms.some(t => t.toLowerCase() === part.toLowerCase())
+    part && lower.has(part.toLowerCase())
       ? <mark className="hl-term" key={i}>{part}</mark>
       : part
   );

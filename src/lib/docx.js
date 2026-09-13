@@ -82,9 +82,11 @@ export async function buildResumeDocx(resume, title = 'Resume') {
     parts.forEach((p, i) => {
       if (i) runs.push(new TextRun({ text: '   \u2022   ', color: MUTED, size: 19 }));
       if (p.href) {
+        // Colour and underline are set explicitly rather than relying on the
+        // built-in 'Hyperlink' style, which Word only applies if it's defined.
         runs.push(new ExternalHyperlink({
           link: p.href,
-          children: [new TextRun({ text: p.text, size: 19, style: 'Hyperlink' })],
+          children: [new TextRun({ text: p.text, size: 19, color: '1155CC', underline: {} })],
         }));
       } else {
         runs.push(new TextRun({ text: p.text, color: MUTED, size: 19 }));

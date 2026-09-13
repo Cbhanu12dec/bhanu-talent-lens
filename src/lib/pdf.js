@@ -4,6 +4,7 @@ import { splitContact } from './contactLinks.js';
 const NAVY = [0, 0, 0];          // headings / name — solid black per user preference, no color accents
 const TEXT = [0, 0, 0];          // body text
 const MUTED = [0, 0, 0];         // contact line, subtitles, dates
+const LINK = [17, 85, 204];      // only clickable parts get colour, so a link reads as one
 
 function sanitizeFilename(name) {
   return name.replace(/[^a-z0-9\-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'resume';
@@ -44,12 +45,21 @@ export function buildResumePdf(resume, title = 'Resume') {
     const totalW = parts.reduce((w, p, i) => w + doc.getTextWidth(p.text) + (i ? sepW : 0), 0);
     let x = (pageWidth - totalW) / 2;
     parts.forEach((p, i) => {
-      if (i) { doc.text(sep, x, y); x += sepW; }
+      if (i) { doc.setTextColor(...MUTED); doc.text(sep, x, y); x += sepW; }
       const w = doc.getTextWidth(p.text);
-      doc.text(p.text, x, y);
-      if (p.href) doc.link(x, y - 8, w, 11, { url: p.href });
+      if (p.href) {
+        doc.setTextColor(...LINK);
+        doc.text(p.text, x, y);
+        doc.setDrawColor(...LINK); doc.setLineWidth(0.6);
+        doc.line(x, y + 1.5, x + w, y + 1.5);
+        doc.link(x, y - 8, w, 11, { url: p.href });
+      } else {
+        doc.setTextColor(...MUTED);
+        doc.text(p.text, x, y);
+      }
       x += w;
     });
+    doc.setTextColor(...TEXT);
     y += 20;
   } else {
     y += 6;
