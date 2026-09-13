@@ -244,6 +244,10 @@ const ATS_TARGET_QUANT_RATIO = 0.5;    // share of bullets carrying a concrete n
 const WEAK_OPENER_RE = /^(responsible for|worked on|helped|assisted (with|in)|involved in|tasked with|duties included|participated in|contributed to)\b/i;
 const PRONOUN_RE = /\b(I|my|me|we|our|us)\b/;
 const BUZZWORD_RE = /\b(synergy|synergies|team player|results[- ]driven|go[- ]getter|self[- ]starter|think outside the box|detail[- ]oriented|hard[- ]working|dynamic professional|proven track record)\b/i;
+// Not banned outright — any one of these can be the honest verb. It's the pile-up
+// that reads as machine-written, so this is counted rather than flagged per hit.
+const AI_SIGNAL_RE = /\b(leverag(?:e|ed|ing)|spearhead(?:ed|ing)?|orchestrat(?:e|ed|ing)|utiliz(?:e|ed|ing)|transformative|cutting[- ]edge|innovative solutions?|seamless(?:ly)?|robust|comprehensive|data[- ]driven|holistic|strategic initiatives?)\b/gi;
+const AI_SIGNAL_BUDGET = 3;
 
 function resumeToPlainText(resume) {
   const parts = [];
@@ -287,6 +291,7 @@ function auditAts(resume, requiredKeywords = []) {
     pronounBullets: bullets.filter(b => PRONOUN_RE.test(b)),
     weakOpenerBullets: bullets.filter(b => WEAK_OPENER_RE.test(b.trim())),
     buzzwordBullets: bullets.filter(b => BUZZWORD_RE.test(b)),
+    aiSignalWords: bullets.flatMap(b => b.match(AI_SIGNAL_RE) || []),
   };
 }
 
@@ -316,6 +321,12 @@ function atsRepairInstruction(audit) {
   }
   if (audit.buzzwordBullets.length) {
     issues.push(`Replace the generic buzzwords in these bullets with the specific thing that was actually done: ${audit.buzzwordBullets.slice(0, 5).map(b => `"${b.slice(0, 70)}"`).join('; ')}.`);
+  }
+  if ((audit.aiSignalWords || []).length > AI_SIGNAL_BUDGET) {
+    const counts = {};
+    for (const w of audit.aiSignalWords) { const k = w.toLowerCase(); counts[k] = (counts[k] || 0) + 1; }
+    const listed = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([w, n]) => `"${w}" x${n}`).join(', ');
+    issues.push(`The draft uses ${audit.aiSignalWords.length} inflated/AI-sounding words, which reads as machine-written: ${listed}. Cut this to at most ${AI_SIGNAL_BUDGET} across the whole resume by replacing each with the concrete verb for what was actually done (e.g. "leveraged X to improve Y" becomes "rebuilt X, cutting Y"). Keep an instance only where it is genuinely the most accurate word.`);
   }
   return issues.length ? issues.map((s, i) => `${i + 1}. ${s}`).join('\n') : '';
 }
@@ -400,6 +411,53 @@ const ATS_RULES = `ATS COMPLIANCE - non-negotiable structural rules
 - Quantify at least half of all experience bullets with a real number: scale, volume, users, revenue, team size, percentage, or timeline. Only use figures the source material genuinely supports, never invented ones.
 - Banned filler: "synergy", "team player", "results-driven", "go-getter", "self-starter", "detail-oriented", "proven track record". State the specific accomplishment instead.
 - Every skill listed in the Skills section must also be demonstrated somewhere in an experience bullet or the summary, not just listed in isolation.`;
+
+// ATS_RULES covers machine parsing. This covers the two human layers an ATS
+// score can't detect: the recruiter's 15-second scan and the hiring manager's
+// read for real ownership. Injected into both resume generators.
+const CRAFT_RULES = `RESUME CRAFT - how the content itself must be built
+
+NEVER MIRROR THE JOB DESCRIPTION
+A JD responsibility flipped into past tense is a failure, not a tailored bullet ("Lead complex cross-functional programs and manage dependencies" becoming "Led complex cross-functional programs and managed dependencies"). For each requirement: identify the underlying competency, find the candidate's real project that demonstrates it, write the bullet around that project, and let the JD's term land naturally inside it. The finished resume must never read as the posting reflected back, because that is exactly what an experienced reader recognizes as artificial tailoring.
+
+ORGANIZE BULLETS AROUND PROJECTS, NOT KEYWORDS
+Never write one bullet per keyword - no separate SQL bullet, Power BI bullet, Jira bullet, risk-management bullet. Before writing any role, identify that employer's real initiatives (2-4 of them: the transformations, launches, migrations, platforms, or problems owned), then build the bullets around those initiatives so tools and terminology appear inside a story. One bullet can carry five keywords credibly: "Built automated executive reporting in SQL and Power BI consolidating schedule, financial, risk, and operational data across 8 workstreams, cutting weekly preparation 40%." Keyword coverage is still required, but coverage means the term appears in credible context somewhere, never that it earns its own line.
+
+ONE PRIMARY PROFESSIONAL IDENTITY
+The resume must answer "what is this candidate?" in a single phrase, and every other capability must reinforce that identity rather than compete with it. Never position one person simultaneously as Program Manager + Product Manager + Business Analyst + Data Analyst + Architect + Developer unless the career genuinely supports that breadth.
+
+SUMMARY, AND EXPERIENCE THAT PROVES IT
+The summary is not keyword storage. Write 3-4 sentences, roughly 60-100 words, answering: WHO (identity and experience level), WHERE (primary industries and domains), WHAT (the kinds of programs, products, or problems handled), HOW (the most valuable strengths), VALUE (what differentiates this candidate). Never write a comma chain of competencies ("program management, project management, stakeholder management, solution design, workflow automation, analytics reporting") - that reads as ATS manipulation. Every claim the summary makes must have a bullet proving it: claim budget ownership and a bullet must show a budget; claim analytics depth and a bullet must show real analysis. Never make a claim just because the JD asks for it.
+
+BULLET SHAPE
+Strong bullets carry ownership + context or problem + action + scale or complexity + outcome. Not every bullet needs all five, but each role as a whole must demonstrate them. After reading a role, a reader must be able to answer: what did they own; how big was it; what was complex about it; what did this person personally do; who did they work with; what changed as a result. If several of those are unanswerable, rewrite the role.
+- Write results, not duties. "Responsible for managing project risks" is a duty. "Identified a vendor integration risk six weeks before launch and drove a phased rollout that protected the committed production date" is an accomplishment. Always prefer the second.
+- Cut generic bullets that could belong to thousands of candidates ("Managed risks and dependencies", "Worked with cross-functional stakeholders", "Managed multiple projects", "Used Jira to track projects"). Name the specific risk, the dependency, the project, the number of teams, the decision, the outcome.
+- Tools support accomplishments and never stand alone. Not "Experience with SQL" but what was queried, validated, or uncovered with it. Not "Used Jira for project management" but what the tracking actually changed.
+- Drop low-value content: maintained documentation, attended meetings, updated Jira or SharePoint, prepared status reports, scheduled meetings, took notes - unless the activity was part of a larger meaningful accomplishment.
+
+DEPTH ALLOCATION AND CAREER PROGRESSION
+Space follows relevance and recency: current role 6-8 strong bullets, previous relevant role 5-7, older roles 3-5. Never give every position the same count. Early roles must not read like recent ones. Show the arc: analysis, requirements, and execution support early; project ownership, cross-functional leadership, and budget or risk responsibility mid-career; multiple workstreams, strategic scope, executive stakeholders, vendors, and business outcomes now. The reader should understand why this person moved from one role to the next.
+
+EACH EMPLOYER GETS A DISTINCT STORY
+Do not repeat the same capability set at every company. Give each employer its own center of gravity - for example data-platform transformation and analytics at one, enterprise program leadership and integrations at another, product modernization and operational scale at a third. Repeating the same story everywhere makes a career look invented.
+
+BULLET ORDER WITHIN EACH ROLE
+Order by importance, not chronology: largest ownership and scope first, then the most important project or program, then the strongest measurable accomplishment, then technical or functional complexity, cross-functional leadership, process and automation improvement, and governance, budget, or risk last. Never open a senior role with a low-value administrative responsibility.
+
+SOUND HUMAN
+Specificity sounds human; elevated vocabulary sounds generated. Use these sparingly if at all: leveraged, spearheaded, orchestrated, utilized, dynamic, strategic initiatives, transformative, cutting-edge, innovative solutions, seamless, robust, comprehensive, data-driven, holistic. Prefer "Implemented an automated ticket-classification workflow that reduced manual triage" over "Leveraged robust AI-enabled solutions to drive transformative operational efficiencies." Match the verb to the real contribution - never upgrade work the candidate only supported into "spearheaded" or "owned".
+
+SKILLS SECTION
+Group skills into logical, scannable categories that match the profession and the JD's stack. Never put full sentences in a skills section, and never emit one flat undifferentiated list.
+
+QUANTIFY HONESTLY
+Prefer defensible numbers: budget, workstreams, team size, stakeholders, vendors, applications, locations, users, releases, percent milestone adherence, weeks of schedule recovered, percent manual effort removed, hours saved per month, cost saved or avoided, percent defect or incident reduction, SLA improvement, zero critical incidents. If a figure is genuinely unknown, write the accomplishment credibly without a number rather than inventing one.
+
+INTERVIEW DEFENSIBILITY - the final gate
+For every bullet ask: could this candidate speak to it for three to five minutes covering the situation, the problem, their responsibility, the people involved, the actions and decisions they made, the obstacles, the technology or process, and the result? If not, rewrite or cut it. High keyword coverage with low credibility is a failed resume.
+
+The resume must not say "I match your job description." It must show the real problems this person owned, the scale they worked at, the decisions they made, and the results they produced, which then happen to align with what this JD needs.`;
 
 
 // Global billing config, admin-controlled. Read fresh on every tailor call
@@ -551,12 +609,14 @@ KEYWORD COVERAGE — hard requirement, not a stylistic suggestion
 Every JD requirement backed by DIRECT or TRANSFERABLE evidence must appear using the JD's own wording, at least once, somewhere in the resume — don't omit a supported keyword for style reasons. Placement priority: Summary and most recent role first, then Technical Skills, then earlier roles.
 
 BULLET JUSTIFICATION — every experience bullet, no exceptions
-Each bullet must be traceable to a specific JD requirement. For every bullet: lead with the action using the JD's own terminology for the technology/domain/responsibility, state the scope or scale where the source supports it, and close on a concrete outcome. If a bullet cannot be tied to anything the JD asks for, cut it and write a stronger one from the same role's real evidence instead. Order bullets inside each role so the ones covering Critical/High requirements come first. Do not reuse the same leading verb more than twice across the whole resume.
+Each bullet must earn its place against this JD, but a bullet is justified by covering a real requirement through the candidate's own project, not by hosting a keyword. Build bullets around the role's actual initiatives (see RESUME CRAFT below) and let one bullet carry several related requirements at once. For every bullet: lead with the action using the JD's own terminology for the technology/domain/responsibility, state the scope or scale where the source supports it, and close on a concrete outcome. If a bullet cannot be tied to anything the JD asks for, cut it and write a stronger one from the same role's real evidence instead. Order bullets inside each role so the ones covering Critical/High requirements come first. Do not reuse the same leading verb more than twice across the whole resume.
 
 PUNCTUATION — hard rule
 Never use em dashes or en dashes anywhere in the resume output. Use commas, colons, or separate sentences instead. For date ranges use a plain hyphen, e.g. "Jan 2020 - Mar 2023".
 
 ${ATS_RULES}
+
+${CRAFT_RULES}
 
 PRIORITY ORDER when tensions arise: truthfulness > evidence strength > required JD coverage > recruiter readability > style polish.
 
@@ -564,7 +624,9 @@ BEFORE RETURNING — internal audit, do not print any of this reasoning, only th
 1. List the JD's most important requirements with your evidence classification for each, and confirm every DIRECT/TRANSFERABLE requirement actually appears in your draft's exact wording — add any that are missing.
 2. Check every changed bullet, the Skills section, and every job title against REWRITE DEPTH above — flag and rewrite any bullet that's just the original sentence with a keyword swapped in, any Skills list that's a flat uncategorized dump, and any title that still leads with a different function than what this JD is hiring for. Cut bullets that don't earn their place, merge redundant ones, then re-read only the summary and most recent role: could a recruiter identify the target role, seniority, and 2-3 core strengths in 10 seconds? If not, revise those two sections before moving on.
 3. Walk the ATS COMPLIANCE list above item by item against your draft and fix every violation: weak bullet openers, pronouns, unexpanded acronyms, inconsistent date formats, banned filler, and bullets with no number where the source supports one.
-4. Only after this pass, assign the ATS score and breakdown honestly based on the resume you actually produced.
+4. Walk RESUME CRAFT above and fix what it catches: cut any bullet that is a JD responsibility flipped into past tense, any bullet that exists only to host a keyword, any generic bullet that could belong to anyone, and any low-value administrative line. Confirm the resume states one primary identity, that bullet counts taper by recency (current role deepest), that each employer tells a distinct story, that the career visibly progresses, and that every claim in the summary has a bullet proving it.
+5. Score the draft 1-10 on ATS relevance (target 9), recruiter readability (9), hiring manager credibility (9), specificity (8), quantification (8.5), career progression (8), natural human writing (9), and interview defensibility (10). Where a score falls short, revise that specific weakness and re-check. Never finalize a draft that scores high on keywords but reads as copied from the JD — rewrite it instead.
+6. Only after this pass, assign the ATS score and breakdown honestly based on the resume you actually produced.
 
 Respond in EXACTLY this format, nothing before or after — no markdown fences, no commentary:
 
@@ -657,7 +719,7 @@ Include only the sections that make sense for this resume's actual content — d
       }
 
       async function runPass(userContent, timeoutMs, logTag, model) {
-        const raw = await callAnthropic(apiKey, userContent, { model: model || MODEL_QUALITY, maxTokens: 4096, system, timeoutMs, logTag });
+        const raw = await callAnthropic(apiKey, userContent, { model: model || MODEL_QUALITY, maxTokens: 8000, system, timeoutMs, logTag });
         return parseTailorResponse(raw);
       }
 
@@ -1341,7 +1403,7 @@ BULLET REBUILD - apply to every single experience bullet, no exceptions
 Do not carry over generic duties. Rebuild each bullet from the underlying project synopsis so it visibly answers a requirement in this JD:
 - Lead with the action and the JD's own terminology for the technology, domain, or responsibility involved, wherever the candidate's real evidence supports it.
 - State the scope or scale (users, volume, regions, team size, systems) and close with a measurable or concrete outcome whenever the ground truth supports one. Never invent a number.
-- Every bullet must be traceable to a JD requirement. If a bullet cannot be tied to anything the JD asks for, cut it and write a stronger one from the same role's real evidence instead.
+- Every bullet must earn its place against a JD requirement, but a bullet is justified by covering that requirement through the candidate's own project, never by hosting a keyword. Build bullets around each employer's real initiatives (see RESUME CRAFT below) and let one bullet carry several related requirements. If a bullet cannot be tied to anything the JD asks for, cut it and write a stronger one from the same role's real evidence instead.
 - Order bullets within each role so the ones matching Critical/High requirements come first.
 - Do not reuse the same leading verb more than twice across the whole resume.
 
@@ -1357,7 +1419,7 @@ The summary is the one section that must read as a truthful account of who this 
 - Name the domain or speciality supplied as TARGET DOMAIN when one is given, so the summary positions the candidate inside that field.
 - Every claim must be traceable to the ground truth: real employers, real systems, real scale. Do not assert familiarity with a tool, platform, or regulation that appears only in the job description.
 - Do not copy sentences or distinctive phrases from the job description into the summary, and never describe the role's responsibilities as though they were the candidate's past work.
-- Aim for 2-3 sentences: who they are and how long, what they have actually built or led with a concrete anchor, then the value they bring to this kind of role.
+- Aim for 3-4 sentences, roughly 60-100 words, following the WHO / WHERE / WHAT / HOW / VALUE structure in RESUME CRAFT below. Every claim it makes must be proven by a bullet in the experience section.
 
 KEYWORD COVERAGE - hard requirement, not a stylistic suggestion
 The user message lists KEYWORDS TO COVER drawn from this JD. Every one of them that the ground truth truthfully supports must appear in the resume using the JD's own wording, at least once. Placement priority: Professional Summary and the most recent role first, then Technical Skills, then earlier roles. Work them in as part of real accomplishments, never as a keyword list bolted onto the end. Omit only the ones the candidate genuinely has no evidence for, and do not stretch a claim to fit a keyword.
@@ -1365,18 +1427,22 @@ The user message lists KEYWORDS TO COVER drawn from this JD. Every one of them t
 BEFORE RETURNING - internal audit, do not print this reasoning
 1. Walk the KEYWORDS TO COVER list and confirm each supported one appears in your draft's exact wording; add any that are missing.
 2. Walk the ATS COMPLIANCE list and fix every violation: weak bullet openers, pronouns, unexpanded acronyms, inconsistent dates, banned filler, and bullets with no number where the ground truth supports one.
+3. Walk RESUME CRAFT and fix what it catches: cut any bullet that is a JD responsibility flipped into past tense, any bullet that exists only to host a keyword, any generic bullet that could belong to anyone, and any low-value administrative line. Confirm the resume states one primary identity, that bullet counts taper by recency, that each employer tells a distinct story, that the career visibly progresses, and that every summary claim has a bullet proving it.
+4. Score the draft 1-10 on ATS relevance (target 9), recruiter readability (9), hiring manager credibility (9), specificity (8), quantification (8.5), career progression (8), natural human writing (9), and interview defensibility (10). Where a score falls short, revise that weakness before returning. Never finalize a draft that scores high on keywords but reads as copied from the JD.
 
 REVISION MODE
 If the user message includes an EXISTING DRAFT, you are editing that draft, not authoring a new resume. Preserve its structure, section order, and wording exactly except where an instruction requires a change. Change the minimum needed to satisfy the instructions, then re-check the whole document against the ATS rules below. If no EXISTING DRAFT is provided, build the resume from the ground truth as described above.
 
 ${ATS_RULES}
 
+${CRAFT_RULES}
+
 Respond in EXACTLY this JSON format, nothing else:
 {
   "name": "candidate name",
   "contact": "phone | email | linkedin | location",
   "sections": [
-    { "heading": "PROFESSIONAL SUMMARY", "paragraphs": ["2-3 sentence summary"] },
+    { "heading": "PROFESSIONAL SUMMARY", "paragraphs": ["3-4 sentence summary, 60-100 words"] },
     { "heading": "TECHNICAL SKILLS", "paragraphs": ["Category: skill, skill", "Category: skill"] },
     { "heading": "PROFESSIONAL EXPERIENCE", "entries": [{ "title": "Role Title", "subtitle": "Company | Location", "dateRight": "Mon YYYY - Mon YYYY", "bullets": ["bullet 1", "bullet 2"], "footer": "Tools: optional" }] },
     { "heading": "EDUCATION", "entries": [{ "title": "Degree", "subtitle": "School", "dateRight": "YYYY", "bullets": [] }] }
@@ -1412,7 +1478,7 @@ Apply the POSITIONING instructions above to the draft as targeted edits. Keep ev
 
     async function runAgentBuildPass(userContent, logTag) {
       const rawOut = await callAnthropic(apiKey, userContent, {
-        model: MODEL_QUALITY, maxTokens: 4096, system: systemPrompt,
+        model: MODEL_QUALITY, maxTokens: 8000, system: systemPrompt,
         timeoutMs: 120000, logTag
       });
       return sanitizeResumeContent(JSON.parse(stripJsonFence(rawOut)));
