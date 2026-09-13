@@ -102,80 +102,110 @@ const BUILD_STAGES = {
   existing: ['Reading your base resume…', 'Analyzing the job description…', 'Rewriting against the JD…', 'Optimizing for ATS…'],
 };
 
-// Cute progress mascot — a cat typing at a laptop while the resume builds.
+// Cute progress mascot — a cat curled over a laptop while the resume builds.
 // Purely decorative, so it carries aria-hidden and the real status stays in the log.
 function BuildCat({ done = false }) {
   return (
-    <svg className={`build-cat${done ? ' done' : ''}`} viewBox="0 0 170 132" width="196" height="152" aria-hidden="true">
-      <ellipse className="cat-glow" cx="85" cy="110" rx="48" ry="6" />
-      <rect x="12" y="104" width="146" height="5" rx="2.5" fill="var(--border-strong)" />
+    <svg className={`build-cat${done ? ' done' : ''}`} viewBox="0 0 180 140" width="208" height="162" aria-hidden="true">
+      <defs>
+        <linearGradient id="bcFur" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#6FB0FF" />
+          <stop offset="1" stopColor="var(--brand)" />
+        </linearGradient>
+        {/* Soft ambient shadow, so shapes sit on the page instead of floating. */}
+        <filter id="bcSoft" x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#12305C" floodOpacity="0.22" />
+        </filter>
+        <filter id="bcBlur" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="4" />
+        </filter>
+      </defs>
+
+      <ellipse className="cat-glow" cx="90" cy="126" rx="54" ry="7" filter="url(#bcBlur)" />
 
       {/* coffee, because this is clearly a long build */}
       <g className="cat-steam">
-        <path d="M24 86 q4 -5 0 -10 q-4 -5 0 -10" />
-        <path d="M31 88 q4 -6 0 -11 q-4 -6 0 -11" />
+        <path d="M24 96 q4 -5 0 -10 q-4 -5 0 -10" />
+        <path d="M31 98 q4 -6 0 -11 q-4 -6 0 -11" />
       </g>
-      <rect x="17" y="89" width="19" height="15" rx="3.5" fill="var(--brand-soft)" stroke="var(--brand)" strokeWidth="2" />
-      <path d="M36 93 q7 0 7 4.5 q0 4.5 -7 4.5" stroke="var(--brand)" strokeWidth="2" fill="none" />
-
-      <path className="cat-tail" d="M108 94 q26 4 22 -22" stroke="var(--brand)" strokeWidth="6" strokeLinecap="round" fill="none" />
-
-      {/* body is wider than the laptop so the shoulders stay visible */}
-      <g className="cat-body">
-        <ellipse cx="85" cy="78" rx="37" ry="26" fill="var(--brand)" />
+      <g filter="url(#bcSoft)">
+        <rect x="16" y="99" width="20" height="16" rx="5" fill="#fff" stroke="var(--brand)" strokeWidth="2.5" />
+        <path d="M36 103 q7 0 7 5 q0 5 -7 5" stroke="var(--brand)" strokeWidth="2.5" fill="none" />
       </g>
 
-      {/* laptop, drawn over the body so the cat sits behind it */}
-      <rect x="55" y="50" width="60" height="42" rx="5" fill="var(--border-strong)" />
-      <rect x="58.5" y="53.5" width="53" height="35" rx="3" fill="#fff" />
+      <path className="cat-tail" d="M122 100 q28 8 24 -22" stroke="url(#bcFur)" strokeWidth="8" strokeLinecap="round" fill="none" />
+
+      <g className="cat-body" filter="url(#bcSoft)">
+        <ellipse cx="90" cy="88" rx="40" ry="31" fill="url(#bcFur)" />
+        <ellipse cx="90" cy="96" rx="23" ry="19" fill="#fff" opacity=".22" />
+      </g>
+
+      {/* laptop, drawn over the body so it reads as resting on the cat's lap */}
+      <g filter="url(#bcSoft)">
+        <rect x="58" y="58" width="64" height="44" rx="7" fill="#E9EFFA" />
+        <rect x="62" y="62" width="56" height="36" rx="4" fill="#fff" />
+      </g>
       {done ? (
-        <path className="cat-check" d="M72 71 l8 8 l18 -18" stroke="var(--good)" strokeWidth="4.5"
+        <path className="cat-check" d="M76 80 l8 8 l18 -18" stroke="var(--good)" strokeWidth="5"
           fill="none" strokeLinecap="round" strokeLinejoin="round" />
       ) : (
         <g className="cat-lines">
-          <rect className="cat-line" x="63" y="60" width="44" height="4" rx="2" fill="var(--brand)" />
-          <rect className="cat-line" x="63" y="69" width="44" height="4" rx="2" fill="var(--brand)" />
-          <rect className="cat-line" x="63" y="78" width="30" height="4" rx="2" fill="var(--brand)" />
+          <rect className="cat-line" x="67" y="69" width="46" height="4" rx="2" fill="var(--brand)" />
+          <rect className="cat-line" x="67" y="78" width="46" height="4" rx="2" fill="var(--brand)" />
+          <rect className="cat-line" x="67" y="87" width="30" height="4" rx="2" fill="var(--brand)" />
         </g>
       )}
-      <path d="M47 92 h76 l10 11 h-96 z" fill="var(--border-strong)" />
-      <rect x="72" y="96" width="26" height="3" rx="1.5" fill="#fff" opacity=".7" />
+      <path d="M50 102 h80 l10 11 h-100 z" fill="#DCE5F4" />
+      <rect x="78" y="106" width="24" height="3" rx="1.5" fill="#fff" opacity=".75" />
 
-      {/* head sits above the screen, so it stays readable at small sizes */}
-      <g className="cat-head">
+      {/* head sits above the screen so it stays readable at small sizes */}
+      <g className="cat-head" filter="url(#bcSoft)">
+        {/* round-joined strokes keep the ears soft instead of spiky */}
         <g className="cat-ear l">
-          <path d="M65 28 L68 7 L82 21 Z" fill="var(--brand)" />
-          <path d="M69 24 L70.5 13 L78 20 Z" fill="#fff" opacity=".28" />
+          <path d="M68 30 L76 11 L92 26 Z" fill="url(#bcFur)" stroke="var(--brand)" strokeWidth="7" strokeLinejoin="round" />
+          <path d="M75 26 L78 17 L85 25 Z" fill="#FF9DB4" opacity=".55" />
         </g>
         <g className="cat-ear r">
-          <path d="M105 28 L102 7 L88 21 Z" fill="var(--brand)" />
-          <path d="M101 24 L99.5 13 L92 20 Z" fill="#fff" opacity=".28" />
+          <path d="M112 30 L104 11 L88 26 Z" fill="url(#bcFur)" stroke="var(--brand)" strokeWidth="7" strokeLinejoin="round" />
+          <path d="M105 26 L102 17 L95 25 Z" fill="#FF9DB4" opacity=".55" />
         </g>
-        <ellipse cx="85" cy="36" rx="21" ry="17.5" fill="var(--brand)" />
-        <ellipse cx="85" cy="43" rx="10" ry="6.5" fill="#fff" opacity=".18" />
+        <ellipse cx="90" cy="42" rx="27" ry="23" fill="url(#bcFur)" />
+        <ellipse cx="90" cy="52" rx="11" ry="7" fill="#fff" opacity=".18" />
+
+        <ellipse className="cat-blush" cx="69" cy="50" rx="5.5" ry="3.2" fill="#FF8FA8" opacity=".5" />
+        <ellipse className="cat-blush" cx="111" cy="50" rx="5.5" ry="3.2" fill="#FF8FA8" opacity=".5" />
+
         {done ? (
-          <g className="cat-eyes" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
-            <path d="M73 35 q4 -4.5 8 0" />
-            <path d="M89 35 q4 -4.5 8 0" />
+          <g className="cat-eyes" fill="none" stroke="#12305C" strokeWidth="2.6" strokeLinecap="round">
+            <path d="M73 42 q5 -6 10 0" />
+            <path d="M97 42 q5 -6 10 0" />
           </g>
         ) : (
           <g className="cat-eyes">
-            <ellipse cx="77" cy="34" rx="2.9" ry="3.5" fill="#fff" />
-            <ellipse cx="93" cy="34" rx="2.9" ry="3.5" fill="#fff" />
+            <ellipse cx="78" cy="41" rx="5.2" ry="6.2" fill="#12305C" />
+            <ellipse cx="102" cy="41" rx="5.2" ry="6.2" fill="#12305C" />
+            <circle cx="76.3" cy="38.6" r="1.9" fill="#fff" />
+            <circle cx="100.3" cy="38.6" r="1.9" fill="#fff" />
+            <circle cx="79.8" cy="43.6" r="1" fill="#fff" opacity=".7" />
+            <circle cx="103.8" cy="43.6" r="1" fill="#fff" opacity=".7" />
           </g>
         )}
-        <path d="M85 40 l-2.6 2.2 h5.2 z" fill="#fff" />
-        <path d="M80.5 45 q4.5 3.2 9 0" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <path d="M56 38 h13 M57 44 h12 M114 38 h-13 M113 44 h-12" stroke="#fff" opacity=".5" strokeWidth="1.4" strokeLinecap="round" />
+
+        <path d="M90 48.5 l-3 2.6 h6 z" fill="#FFC2CE" />
+        <path d="M84 54 q3 3.2 6 0 q3 3.2 6 0" stroke="#fff" strokeWidth="1.7" fill="none" strokeLinecap="round" opacity=".85" />
+        {/* Tinted, not white: these extend past the face onto the page, where a
+            white stroke would only show up as the filter's grey shadow. */}
+        <path d="M56 43 h10 M57 50 h9 M124 43 h-10 M123 50 h-9"
+          stroke="#A8CCFA" strokeWidth="1.7" strokeLinecap="round" />
       </g>
 
-      <ellipse className="cat-paw l" cx="66" cy="96" rx="7" ry="5" fill="var(--brand)" />
-      <ellipse className="cat-paw r" cx="104" cy="96" rx="7" ry="5" fill="var(--brand)" />
+      <ellipse className="cat-paw l" cx="70" cy="105" rx="8" ry="5.5" fill="url(#bcFur)" />
+      <ellipse className="cat-paw r" cx="110" cy="105" rx="8" ry="5.5" fill="url(#bcFur)" />
 
       <g className="cat-sparks" fill="var(--brand)">
-        <path className="cat-spark" d="M136 30 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 l5 -2 z" />
-        <path className="cat-spark" d="M150 16 l1.6 4 l4 1.6 l-4 1.6 l-1.6 4 l-1.6 -4 l-4 -1.6 l4 -1.6 z" />
-        <path className="cat-spark" d="M127 12 l1.3 3.2 l3.2 1.3 l-3.2 1.3 l-1.3 3.2 l-1.3 -3.2 l-3.2 -1.3 l3.2 -1.3 z" />
+        <path className="cat-spark" d="M144 34 l2.2 5.4 l5.4 2.2 l-5.4 2.2 l-2.2 5.4 l-2.2 -5.4 l-5.4 -2.2 l5.4 -2.2 z" />
+        <path className="cat-spark" d="M158 18 l1.7 4.2 l4.2 1.7 l-4.2 1.7 l-1.7 4.2 l-1.7 -4.2 l-4.2 -1.7 l4.2 -1.7 z" />
+        <path className="cat-spark" d="M134 14 l1.3 3.3 l3.3 1.3 l-3.3 1.3 l-1.3 3.3 l-1.3 -3.3 l-3.3 -1.3 l3.3 -1.3 z" />
       </g>
     </svg>
   );
