@@ -36,7 +36,7 @@ export default function ProfileSettingsView({ uid, state }) {
   return (
     <section>
       <h1 className="page-title">Profile and settings</h1>
-      <p className="page-sub">Your info and how ResumeCraftPro sends on your behalf.</p>
+      <p className="page-sub">Your info and how ResumeCraft Pro sends on your behalf.</p>
 
       <div className="panel">
         <div className="panel-head"><h2>Basic info</h2></div>
@@ -80,7 +80,7 @@ export default function ProfileSettingsView({ uid, state }) {
             </div>
           </>
         ) : (
-          <div className="anno">You're signed in with Google — there's no separate ResumeCraftPro password to manage here.</div>
+          <div className="anno">You're signed in with Google — there's no separate ResumeCraft Pro password to manage here.</div>
         )}
       </div>
     </section>

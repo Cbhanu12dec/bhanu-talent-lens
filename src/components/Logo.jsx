@@ -1,28 +1,107 @@
-import React from 'react';
+import React, { useId } from 'react';
+import {
+  ICON_VIEWBOX, GRADIENTS, markParts, TAGLINE, TAGLINE_SECONDARY
+} from '../lib/brandMark.js';
 
-// Single brand mark, used in the sidebar, topbar and on the login screen.
-// The `id` suffix keeps gradient ids unique when several render at once.
-export default function Logo({ size = 38, id = 'a' }) {
+// Icon px / wordmark px per step. `md` is the header size and satisfies the
+// 38-44px icon, 24-28px wordmark spec.
+const SIZES = {
+  xs: { icon: 22, word: 14 },
+  sm: { icon: 30, word: 18 },
+  md: { icon: 42, word: 25 },
+  lg: { icon: 56, word: 33 },
+  xl: { icon: 76, word: 44 }
+};
+
+function Grad({ id, g }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" style={{ flex: 'none' }} aria-hidden="true">
+    <linearGradient id={id} x1={g.coords[0]} y1={g.coords[1]} x2={g.coords[2]} y2={g.coords[3]} gradientUnits="userSpaceOnUse">
+      {g.stops.map(([offset, color]) => <stop key={offset} offset={offset} stopColor={color} />)}
+    </linearGradient>
+  );
+}
+
+/**
+ * The mark on its own. `detail="simple"` drops the content rules, which fall
+ * below a pixel and turn to haze under roughly 24px.
+ */
+export function LogoMark({ size = 42, detail, decorative = true }) {
+  // Gradient ids must be unique per instance or the first mark on the page
+  // wins for every later one. useId's colons are stripped for url(#...) safety.
+  const uid = useId().replace(/:/g, '');
+  const level = detail || (size < 24 ? 'simple' : 'full');
+
+  const a11y = decorative
+    ? { 'aria-hidden': true, focusable: false }
+    : { role: 'img', 'aria-label': 'ResumeCraft Pro' };
+
+  return (
+    <svg width={size} height={size} viewBox={ICON_VIEWBOX} fill="none" style={{ flex: 'none', display: 'block' }} {...a11y}>
       <defs>
-        <linearGradient id={`rcp-bg-${id}`} x1="4" y1="2" x2="36" y2="38">
-          <stop offset="0" stopColor="#57A4FF" />
-          <stop offset="1" stopColor="#1170F0" />
-        </linearGradient>
+        <Grad id={`${uid}-brand`} g={GRADIENTS.brand} />
+        <Grad id={`${uid}-swoosh`} g={GRADIENTS.swoosh} />
       </defs>
-      <rect x="2" y="2" width="36" height="36" rx="11" fill={`url(#rcp-bg-${id})`} />
-
-      {/* résumé page */}
-      <rect x="11" y="9.5" width="17.5" height="21.5" rx="3" fill="#fff" />
-      <path d="M14.5 15.5h7M14.5 19.5h9M14.5 23.5h6"
-        stroke="#1170F0" strokeWidth="1.8" strokeLinecap="round" opacity=".5" />
-
-      {/* spark, echoing the ✦ used for credits and the dashboard hero. Filled
-          blue so it reads on the white page, white-outlined where it crosses
-          onto the badge. */}
-      <path d="M27 21.5 l1.9 4.3 l4.3 1.9 l-4.3 1.9 l-1.9 4.3 l-1.9 -4.3 l-4.3 -1.9 l4.3 -1.9 z"
-        fill={`url(#rcp-bg-${id})`} stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+      {markParts({ idPrefix: uid, detail: level }).map(p => (
+        <path
+          key={p.key}
+          d={p.d}
+          fill={p.fill || 'none'}
+          stroke={p.stroke}
+          strokeWidth={p.w}
+          strokeLinecap={p.cap}
+          strokeLinejoin={p.join}
+        />
+      ))}
     </svg>
+  );
+}
+
+/**
+ * The one place logo markup lives. Every surface composes this rather than
+ * hand-rolling its own copy.
+ *
+ * variant: "full" | "icon" | "wordmark"
+ * theme:   "light" | "dark"
+ * size:    "xs" | "sm" | "md" | "lg" | "xl"
+ * responsive: collapse to "ResumeCraft", then to the icon alone, as width drops
+ */
+export default function Logo({
+  variant = 'full',
+  theme = 'light',
+  size = 'md',
+  responsive = false,
+  tagline = false,
+  secondary = false,
+  className = ''
+}) {
+  const s = SIZES[size] || SIZES.md;
+  const cls = ['rcp-logo', `rcp-logo--${theme}`, responsive ? 'rcp-logo--responsive' : '', className]
+    .filter(Boolean).join(' ');
+
+  if (variant === 'icon') {
+    return (
+      <span className={cls}>
+        <LogoMark size={s.icon} decorative={false} />
+      </span>
+    );
+  }
+
+  const word = (
+    <span className="rcp-logo__text" style={{ fontSize: s.word }}>
+      <span className="rcp-logo__word">
+        ResumeCraft<span className="rcp-logo__pro">Pro</span>
+      </span>
+      {tagline && <span className="rcp-logo__tagline">{TAGLINE}</span>}
+      {secondary && <span className="rcp-logo__sub">{TAGLINE_SECONDARY}</span>}
+    </span>
+  );
+
+  if (variant === 'wordmark') return <span className={cls}>{word}</span>;
+
+  return (
+    <span className={cls}>
+      <LogoMark size={s.icon} />
+      {word}
+    </span>
   );
 }

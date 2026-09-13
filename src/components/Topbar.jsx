@@ -39,11 +39,11 @@ export default function Topbar({ view, setView, credits, notifications }) {
   return (
     <div className="topbar">
       <div className="topbar-brand">
-        <button className="topbar-logo" onClick={() => setView('dashboard')} aria-label="ResumeCraftPro home" title="Go to dashboard">
-          <Logo size={28} id="top" />
+        <button className="topbar-logo" onClick={() => setView('dashboard')} aria-label="ResumeCraft Pro home" title="Go to dashboard">
+          <Logo variant="icon" size="sm" />
         </button>
         <span className="topbar-sep" />
-        <div className="topbar-title">{TITLES[view] || 'ResumeCraftPro'}</div>
+        <div className="topbar-title">{TITLES[view] || 'ResumeCraft Pro'}</div>
       </div>
 
       <div className="topbar-right">

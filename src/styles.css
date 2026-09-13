@@ -26,6 +26,19 @@
   --a-mid:#14A5FF;  --a-mid-soft:rgba(20,165,255,.12);  --a-mid-shadow:rgba(20,165,255,.30);
   --a-cyan:#14EBFF; --a-cyan-soft:rgba(20,235,255,.12); --a-cyan-shadow:rgba(20,235,255,.30);
 
+  /* Brand identity palette — logo mark, the "Pro" wordmark and reserved
+     gradient accents. Deliberately separate from the UI --brand ramp above:
+     these are fixed identity values and must not be re-themed per surface. */
+  --brand-navy:#071B4A;
+  --brand-blue:#087CF0;
+  --brand-cyan:#08C4F4;
+  --brand-indigo:#3152F4;
+  --brand-purple:#7924F5;
+  --brand-muted:#65718B;
+  --brand-gradient:linear-gradient(135deg,#08C4F4 0%,#078AF5 38%,#3152F4 70%,#7924F5 100%);
+  --brand-pro-gradient:linear-gradient(90deg,#7A20F5 0%,#3557F6 48%,#078BF3 100%);
+  --brand-dark-bg:#07152F;
+
   --ink-2:#7C89A3;
   --ink-3:#AAB4C6;
   --border:#E7EDFA;
@@ -165,6 +178,47 @@ input,textarea,select{font-family:inherit;font-size:14px;}
 .logo-text,.brand-text{display:flex;flex-direction:column;line-height:1.15;}
 .logo-text .name,.brand-text .name{color:var(--ink);font-weight:700;font-size:17px;letter-spacing:-.01em;}
 .logo-text .tag,.brand-text small{color:var(--text-3);font-size:10.5px;display:block;}
+
+/* --- ResumeCraft Pro lockup (src/components/Logo.jsx) ------------------- */
+.rcp-logo{display:inline-flex;align-items:center;gap:11px;min-width:0;line-height:1;}
+.rcp-logo__text{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.rcp-logo__word{
+  font-family:var(--sans);font-weight:750;letter-spacing:-.048em;white-space:nowrap;
+  color:var(--brand-navy);line-height:1.02;font-size:1em;
+}
+/* "Pro" is one of the few places the brand gradient is allowed. */
+.rcp-logo__pro{
+  background:var(--brand-pro-gradient);
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;-webkit-text-fill-color:transparent;
+  padding-left:.3em;
+}
+.rcp-logo--dark .rcp-logo__word{color:#fff;}
+.rcp-logo__tagline{
+  font-family:var(--sans);font-size:.3em;font-weight:500;letter-spacing:.3em;
+  color:var(--brand-muted);white-space:nowrap;
+}
+.rcp-logo__sub{
+  font-family:var(--sans);font-size:.3em;font-weight:400;letter-spacing:.02em;
+  color:var(--brand-muted);white-space:nowrap;
+}
+.rcp-logo--dark .rcp-logo__tagline,.rcp-logo--dark .rcp-logo__sub{color:#8FA6C9;}
+
+/* Narrow screens drop "Pro", then the wordmark entirely (§13). */
+@media(max-width:640px){
+  .rcp-logo--responsive .rcp-logo__pro{display:none;}
+  .rcp-logo--responsive .rcp-logo__tagline,.rcp-logo--responsive .rcp-logo__sub{display:none;}
+}
+@media(max-width:420px){
+  .rcp-logo--responsive .rcp-logo__text{display:none;}
+}
+
+/* Fallback for engines without background-clip:text, which would otherwise
+   render "Pro" as invisible transparent text. */
+@supports not ((-webkit-background-clip:text) or (background-clip:text)){
+  .rcp-logo__pro{background:none;color:var(--brand-indigo);-webkit-text-fill-color:var(--brand-indigo);}
+}
+.login-brand{display:flex;justify-content:center;}
 
 .nav-group-label,.nav-section-label{
   font-size:10.5px;font-weight:600;letter-spacing:.05em;color:var(--text-3);

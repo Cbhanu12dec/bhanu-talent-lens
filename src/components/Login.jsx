@@ -67,7 +67,7 @@ export default function Login() {
   return (
     <div className="login-shell">
       <div className="login-card">
-        <Logo size={44} />
+        <div className="login-brand"><Logo variant="full" size="lg" tagline /></div>
         <h1 style={{ textAlign: 'center', fontSize: 22, margin: '14px 0 6px' }}>{heading}</h1>
         <p>{subhead}</p>
 

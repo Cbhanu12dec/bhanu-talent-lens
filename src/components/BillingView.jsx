@@ -117,7 +117,7 @@ export default function BillingView({ uid, credits, creditsTotal, checkoutStatus
         </div>
       </div>
       <div className="demo-note">
-        Checkout is handled entirely by Stripe — your card details never touch ResumeCraftPro
+        Checkout is handled entirely by Stripe — your card details never touch ResumeCraft Pro
         servers. Credits are granted only after Stripe confirms the payment via webhook, not
         immediately on redirect, so the balance above may take a few seconds to update.
       </div>

@@ -64,10 +64,7 @@ export default function Sidebar({ view, setView, resumeCount, credits, creditsMa
     <aside className="side">
       {/* Brand */}
       <div className="logo">
-        <Logo size={32} id="side" />
-        <div className="logo-text">
-          <span className="name">ResumeCraftPro</span>
-        </div>
+        <Logo variant="full" size="sm" />
       </div>
 
       <Section label="Workspace" items={WORKSPACE_NAV} />

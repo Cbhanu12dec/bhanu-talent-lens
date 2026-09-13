@@ -19,7 +19,7 @@ function friendlyAuthError(err) {
     'auth/user-not-found': 'No account found with that email.',
     'auth/too-many-requests': 'Too many attempts — please wait a moment and try again.',
     'auth/popup-closed-by-user': 'Sign-in window was closed before finishing.',
-    'auth/credential-already-in-use': 'That Google account is already linked to a different ResumeCraftPro account.'
+    'auth/credential-already-in-use': 'That Google account is already linked to a different ResumeCraft Pro account.'
   };
   return map[err?.code] || err?.message || 'Something went wrong. Please try again.';
 }
