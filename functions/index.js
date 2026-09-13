@@ -26,6 +26,38 @@ function requireAdmin(request) {
   if (!isAdmin(request)) throw new HttpsError('permission-denied', 'Admin access required.');
 }
 
+// Domain content reaches the agent from one of two shapes: the legacy inline
+// `categories[]` array, or the Domain Library sub-collections. Only published
+// skills/bullets and active instructions are ever fed to a build — draft
+// authoring content must not leak into a candidate's resume.
+async function loadDomainContent(domainId) {
+  const empty = { vocab: [], directives: [], bulletTemplates: [] };
+  if (!domainId) return empty;
+  const ref = db.collection('domains').doc(domainId);
+  const snap = await ref.get();
+  if (!snap.exists) return empty;
+
+  const d = snap.data();
+  const legacyVocab = (d.categories || []).flatMap(c => c.skills || []).map(s => s.label).filter(Boolean);
+  const legacyDirectives = (d.categories || []).flatMap(c => c.strongPoints || []).map(sp => sp.text).filter(Boolean);
+  if (legacyVocab.length || legacyDirectives.length) {
+    return { vocab: legacyVocab, directives: legacyDirectives, bulletTemplates: [] };
+  }
+
+  const [skills, instructions, bullets] = await Promise.all([
+    ref.collection('skills').where('status', '==', 'published').get(),
+    ref.collection('instructions').where('status', '==', 'active').get(),
+    ref.collection('bulletPoints').where('status', '==', 'published').get(),
+  ]);
+  return {
+    vocab: skills.docs.map(s => s.data().name).filter(Boolean),
+    directives: instructions.docs
+      .sort((a, b) => (a.data().sortOrder || 0) - (b.data().sortOrder || 0))
+      .map(i => i.data().instruction).filter(Boolean),
+    bulletTemplates: bullets.docs.map(b => b.data().text).filter(Boolean),
+  };
+}
+
 // Tailoring modes — each maps to a short style directive appended to the
 // per-call dynamic prompt (not the cached system block, since these vary).
 const TAILOR_MODES = {
@@ -1141,12 +1173,9 @@ ${rawText}`;
     // Load domain internals server-side — never exposed to client
     let domainContext = '';
     if (domainId) {
-      const domainSnap = await db.collection('domains').doc(domainId).get();
-      if (domainSnap.exists) {
-        const d = domainSnap.data();
-        const vocab = (d.categories || []).flatMap(c => c.skills || []).map(s => s.label).join(', ');
-        const directives = (d.categories || []).flatMap(c => c.strongPoints || []).map(sp => sp.text).join('; ');
-        domainContext = `\nDomain vocabulary (transferable skill synonyms): ${vocab}\nStyle directives: ${directives}`;
+      const { vocab, directives } = await loadDomainContent(domainId);
+      if (vocab.length || directives.length) {
+        domainContext = `\nDomain vocabulary (transferable skill synonyms): ${vocab.join(', ')}\nStyle directives: ${directives.join('; ')}`;
       }
     }
 
@@ -1203,11 +1232,9 @@ JOB TITLE: ${jobDescription.title || ''}`;
 
     // Load domain style directives server-side
     let styleDirectives = [];
+    let bulletTemplates = [];
     if (domainId) {
-      const domainSnap = await db.collection('domains').doc(domainId).get();
-      if (domainSnap.exists) {
-        styleDirectives = (domainSnap.data().categories || []).flatMap(c => c.strongPoints || []).map(sp => sp.text);
-      }
+      ({ directives: styleDirectives, bulletTemplates } = await loadDomainContent(domainId));
     }
 
     // Contact facts are assembled here rather than left to the model, so the
@@ -1245,6 +1272,18 @@ JOB TITLE: ${jobDescription.title || ''}`;
     const allReqTerms = [...new Set((jobDescription.requirements || [])
       .flatMap(r => requirementTerms(r.name).terms))].slice(0, 45);
     const styleNote = styleDirectives.slice(0, 4).join('; ');
+    // Templates are ranked by JD-term overlap and hard-capped: a domain can hold
+    // hundreds, and an unranked dump would both blow the context and bias the
+    // model toward irrelevant phrasing.
+    const bulletPatterns = bulletTemplates
+      .map(text => {
+        const lower = text.toLowerCase();
+        return { text, score: allReqTerms.filter(t => lower.includes(t.toLowerCase())).length };
+      })
+      .filter(p => p.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map(p => p.text);
     const priorityEmployers = (strategy.experiencePriority || []).filter(e => e.level === 'Very High' || e.level === 'High').map(e => e.employer).join(', ');
 
     const systemPrompt = [{
@@ -1301,7 +1340,9 @@ KEYWORDS TO COVER (use each one's exact wording at least once wherever the groun
 PRIORITY EMPLOYERS TO LEAD WITH: ${priorityEmployers || 'all'}
 POSITIONING: ${strategy.positioning || ''}
 SKILLS TO HIGHLIGHT: ${(strategy.skillPriority || []).slice(0, 8).join(', ')}
-${styleNote ? `STYLE DIRECTIVES: ${styleNote}` : ''}${previousResume ? `
+${styleNote ? `STYLE DIRECTIVES: ${styleNote}` : ''}${bulletPatterns.length ? `
+DOMAIN PHRASING PATTERNS (proven shapes for this industry). Square brackets mark values you must take from the ground truth. Use a pattern only when the ground truth supplies every value it needs, and never emit a bracketed placeholder or an invented number in the output:
+- ${bulletPatterns.join('\n- ')}` : ''}${previousResume ? `
 
 EXISTING DRAFT — revise this, do not start over:
 ${JSON.stringify(previousResume)}
@@ -1478,7 +1519,15 @@ Weave each missing requirement into a real accomplishment bullet or the summary 
     }
     if (action === 'list') {
       const snap = await db.collection('domains').get();
-      return { domains: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
+      // Sub-collection counts travel with each domain so this legacy tab can
+      // tell "genuinely empty" apart from "authored in the Domain Library".
+      const domains = await Promise.all(snap.docs.map(async d => {
+        const [subDomains, skills, bulletPoints, instructions] = await Promise.all(
+          ['subDomains', 'skills', 'bulletPoints', 'instructions'].map(async c =>
+            (await d.ref.collection(c).count().get()).data().count));
+        return { id: d.id, ...d.data(), libraryCounts: { subDomains, skills, bulletPoints, instructions } };
+      }));
+      return { domains };
     }
     throw new HttpsError('invalid-argument', `Unknown domainAdmin action: ${action}`);
   }

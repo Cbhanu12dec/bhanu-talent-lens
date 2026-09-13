@@ -1848,6 +1848,12 @@ table tbody tr{border-top:1px solid var(--border);}
 .dl-subtabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px;}
 .dl-subtabs button{background:none;border:none;border-bottom:2px solid transparent;padding:8px 11px;font-size:12.3px;font-weight:600;color:var(--ink-2);cursor:pointer;}
 .dl-subtabs button.on{color:var(--brand);border-bottom-color:var(--brand);}
+.dl-subtab-count{background:var(--navy-soft);color:var(--ink-3);border-radius:999px;padding:1px 6px;font-size:10px;margin-left:5px;font-weight:700;}
+.dl-subtabs button.on .dl-subtab-count{background:var(--brand-soft);color:var(--brand);}
+.dl-scoped-list{list-style:none;padding:0;margin:0;}
+.dl-scoped-list li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.6px;}
+.dl-scoped-list li:last-child{border-bottom:none;}
+.dl-scoped-bullet{background:var(--bg);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
 .dl-drawer-placeholder{background:var(--bg);border-radius:10px;padding:18px;font-size:12.5px;color:var(--ink-2);line-height:1.6;}
 
 .dl-parse-line{background:var(--brand-soft);color:var(--brand);border-radius:8px;padding:8px 11px;font-size:12.3px;margin-bottom:14px;}

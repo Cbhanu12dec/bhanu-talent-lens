@@ -367,6 +367,7 @@ export default function DomainLibraryView({ notify }) {
 
       <SubDomainDrawer open={subDrawer.open} onClose={() => setSubDrawer({ open: false, subDomain: null })}
         domain={domain} subDomain={subDrawer.subDomain}
+        skills={skills} bullets={bullets} instructions={instructions}
         onSave={async data => {
           if (subDrawer.subDomain) await domainLibraryApi.updateSubDomain(domain.id, subDrawer.subDomain.id, data);
           else await domainLibraryApi.createSubDomain({ domainId: domain.id, ...data });

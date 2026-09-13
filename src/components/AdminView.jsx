@@ -579,11 +579,23 @@ function DomainBuilderTab({ notify }) {
 
               {/* Empty domain state */}
               {!dom.categories?.length && !newSubOpen && (
-                <div className="empty-state" style={{ marginBottom: 12 }}>
-                  <div className="empty-state-icon">🧩</div>
-                  <div className="empty-state-title">No sub-domains yet</div>
-                  <p>Add specializations like "Full Stack Developer", "React Developer", or "Java Developer" — each carries its own skill keywords and agent writing instructions.</p>
-                </div>
+                dom.libraryCounts?.subDomains > 0 ? (
+                  <div className="empty-state" style={{ marginBottom: 12 }}>
+                    <div className="empty-state-icon">🗂</div>
+                    <div className="empty-state-title">Managed in the Domain Library</div>
+                    <p>
+                      This domain holds {dom.libraryCounts.subDomains} sub-domains, {dom.libraryCounts.skills} skills,{' '}
+                      {dom.libraryCounts.bulletPoints} bullet points and {dom.libraryCounts.instructions} agent instructions,
+                      stored in the newer structured format. This older builder can't edit them — open the Domain Library to make changes.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="empty-state" style={{ marginBottom: 12 }}>
+                    <div className="empty-state-icon">🧩</div>
+                    <div className="empty-state-title">No sub-domains yet</div>
+                    <p>Add specializations like "Full Stack Developer", "React Developer", or "Java Developer" — each carries its own skill keywords and agent writing instructions.</p>
+                  </div>
+                )
               )}
 
               {/* Sub-domain cards */}

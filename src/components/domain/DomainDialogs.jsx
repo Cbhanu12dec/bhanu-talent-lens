@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Dialog, Drawer } from './DomainPrimitives.jsx';
+import { Dialog, Drawer, StatusBadge, PriorityBadge, TemplateText } from './DomainPrimitives.jsx';
 
 export function CreateDomainModal({ open, onClose, onCreate }) {
   const [form, setForm] = useState({ name: '', description: '', icon: '📁' });
@@ -103,19 +103,29 @@ export function DeleteDomainDialog({ open, onClose, domain, counts, onConfirm })
   );
 }
 
-export function SubDomainDrawer({ open, onClose, domain, subDomain, onSave }) {
+export function SubDomainDrawer({ open, onClose, domain, subDomain, onSave, skills = [], bullets = [], instructions = [] }) {
   const editing = Boolean(subDomain);
   const [tab, setTab] = useState('details');
   const [form, setForm] = useState({ name: '', description: '', status: 'draft' });
 
   React.useEffect(() => {
     setForm(subDomain
-      ? { name: subDomain.name, description: subDomain.description, status: subDomain.status }
+      ? { name: subDomain.name, description: subDomain.description || '', status: subDomain.status }
       : { name: '', description: '', status: 'draft' });
     setTab('details');
   }, [subDomain, open]);
 
-  const valid = form.name.trim() && form.description.trim();
+  // Name is the only hard requirement — imported sub-domains can arrive without
+  // a description, and blocking Save on those made them uneditable.
+  const valid = form.name.trim();
+
+  const scoped = useMemo(() => {
+    if (!subDomain) return { skills: [], bullets: [], instructions: [] };
+    const mine = list => list.filter(x => x.subDomainId === subDomain.id);
+    return { skills: mine(skills), bullets: mine(bullets), instructions: mine(instructions) };
+  }, [subDomain, skills, bullets, instructions]);
+
+  const counts = { skills: scoped.skills.length, bullets: scoped.bullets.length, instructions: scoped.instructions.length };
 
   return (
     <Drawer open={open} onClose={onClose}
@@ -132,29 +142,80 @@ export function SubDomainDrawer({ open, onClose, domain, subDomain, onSave }) {
         {['details', 'skills', 'bullets', 'instructions'].map(t => (
           <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
             {t === 'details' ? 'Details' : t === 'skills' ? 'Skills' : t === 'bullets' ? 'Bullet Points' : 'Agent Instructions'}
+            {editing && t !== 'details' && <span className="dl-subtab-count">{counts[t === 'bullets' ? 'bullets' : t]}</span>}
           </button>
         ))}
       </div>
 
-      {tab === 'details' ? (
+      {tab === 'details' && (
         <>
           {/* Read-only: moving a sub-domain between domains is a separate action. */}
           <label className="dl-field"><span>Parent domain</span>
             <input className="dl-input" value={domain?.name || ''} readOnly disabled /></label>
           <label className="dl-field"><span>Name *</span>
             <input className="dl-input" autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Checkout & Payments" /></label>
-          <label className="dl-field"><span>Description *</span>
+          <label className="dl-field"><span>Description</span>
             <textarea className="dl-input" rows={4} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
               placeholder="What work does this speciality cover?" /></label>
+          <p className="dl-hint">Recommended — the agent uses this to decide when the sub-domain applies.</p>
         </>
-      ) : (
-        <div className="dl-drawer-placeholder">
-          {editing
-            ? `Scoped ${tab} for this sub-domain can be managed here once the data layer lands — for now use the ${tab === 'bullets' ? 'Bullet Points' : tab === 'skills' ? 'Skills' : 'Agent Instructions'} tab.`
-            : 'Save this sub-domain first, then add scoped content here.'}
-        </div>
+      )}
+
+      {tab !== 'details' && !editing && (
+        <div className="dl-drawer-placeholder">Save this sub-domain first, then add scoped content here.</div>
+      )}
+
+      {tab === 'skills' && editing && (
+        scoped.skills.length === 0
+          ? <div className="dl-drawer-placeholder">No skills scoped to this sub-domain yet. Add them from the Skills tab.</div>
+          : <ScopedList items={scoped.skills} render={s => (
+              <>
+                <span className="dl-strong">{s.name}</span>
+                <span className="dl-badge muted">{s.category}</span>
+                <PriorityBadge value={s.priority} />
+                <StatusBadge status={s.status} />
+              </>
+            )} />
+      )}
+
+      {tab === 'bullets' && editing && (
+        scoped.bullets.length === 0
+          ? <div className="dl-drawer-placeholder">No bullet points scoped to this sub-domain yet. Add them from the Bullet Points tab.</div>
+          : <div className="dl-stack-sm">
+              {scoped.bullets.map(b => (
+                <article className="dl-scoped-bullet" key={b.id}>
+                  <p className="dl-bullet-text"><TemplateText text={b.text} /></p>
+                  <div className="dl-row-gap dl-wrap">
+                    <span className="dl-badge neutral">{b.category}</span>
+                    <PriorityBadge value={b.priority} />
+                    <StatusBadge status={b.status} />
+                  </div>
+                  {b.evidenceRequirement && <div className="dl-usage-note"><b>Agent usage:</b> {b.evidenceRequirement}</div>}
+                </article>
+              ))}
+            </div>
+      )}
+
+      {tab === 'instructions' && editing && (
+        scoped.instructions.length === 0
+          ? <div className="dl-drawer-placeholder">No instructions are scoped to this sub-domain. Domain-wide instructions still apply — see the Agent Instructions tab.</div>
+          : <ScopedList items={scoped.instructions} render={i => (
+              <>
+                <span className="dl-instr-text">{i.instruction}</span>
+                <span className="dl-badge neutral">{i.category}</span>
+                <StatusBadge status={i.status} />
+              </>
+            )} />
       )}
     </Drawer>
+  );
+}
+
+function ScopedList({ items, render }) {
+  return (
+    <ul className="dl-scoped-list">
+      {items.map(it => <li key={it.id}>{render(it)}</li>)}
+    </ul>
   );
 }
 
