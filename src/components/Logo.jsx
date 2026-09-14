@@ -75,6 +75,9 @@ export default function Logo({
   className = ''
 }) {
   const s = SIZES[size] || SIZES.md;
+  // Declared on the wrapper rather than the text node, so a narrow container
+  // (the 206px sidebar) can override --rcp-word from a stylesheet.
+  const sizeVars = { '--rcp-word': `${s.word}px` };
   const cls = ['rcp-logo', `rcp-logo--${theme}`, responsive ? 'rcp-logo--responsive' : '', className]
     .filter(Boolean).join(' ');
 
@@ -87,7 +90,7 @@ export default function Logo({
   }
 
   const word = (
-    <span className="rcp-logo__text" style={{ fontSize: s.word }}>
+    <span className="rcp-logo__text">
       <span className="rcp-logo__word">
         ResumeCraft<span className="rcp-logo__pro">Pro</span>
       </span>
@@ -96,10 +99,10 @@ export default function Logo({
     </span>
   );
 
-  if (variant === 'wordmark') return <span className={cls}>{word}</span>;
+  if (variant === 'wordmark') return <span className={cls} style={sizeVars}>{word}</span>;
 
   return (
-    <span className={cls}>
+    <span className={cls} style={sizeVars}>
       <LogoMark size={s.icon} />
       {word}
     </span>
