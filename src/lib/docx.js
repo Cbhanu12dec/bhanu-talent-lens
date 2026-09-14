@@ -108,10 +108,14 @@ export async function buildResumeDocx(resume, title = 'Resume', opts = {}) {
     (section.entries || []).forEach(entry => children.push(...paragraphsForEntry(entry)));
   });
 
-  // A4 is 11906x16838 twips; Word defaults to Letter when size is omitted.
+  // Always set explicitly: the docx library defaults to A4 when size is
+  // omitted, so leaving it out silently ignores a US Letter preference.
+  const size = opts.pageSize === 'a4'
+    ? { width: 11906, height: 16838 }
+    : { width: 12240, height: 15840 };
   const page = {
     margin: { top: PAGE_MARGIN_TWIPS, right: PAGE_MARGIN_TWIPS, bottom: PAGE_MARGIN_TWIPS, left: PAGE_MARGIN_TWIPS },
-    ...(opts.pageSize === 'a4' ? { size: { width: 11906, height: 16838 } } : {})
+    size
   };
   const doc = new Document({ sections: [{ properties: { page }, children }] });
   const blob = await Packer.toBlob(doc);

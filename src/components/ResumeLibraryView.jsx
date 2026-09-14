@@ -9,6 +9,7 @@ import Modal from './Modal.jsx';
 import PageHero from './PageHero.jsx';
 import { buildResumePdf, downloadBlob } from '../lib/pdf.js';
 import { buildResumeDocx } from '../lib/docx.js';
+import { exportOptions } from '../lib/exportPrefs.js';
 
 const DOC_ICON = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>;
 
@@ -151,11 +152,12 @@ export default function ResumeLibraryView({ uid, state, setView, notify }) {
 
   function downloadAs(resume, format) {
     const doc = { name: resume.label, contact: '', sections: [{ heading: 'RESUME', paragraphs: (resume.text || '').split('\n').filter(Boolean) }] };
+    const opts = exportOptions(state.profileInfo);
     if (format === 'pdf') {
-      const { blob, filename } = buildResumePdf(doc, resume.label);
+      const { blob, filename } = buildResumePdf(doc, resume.label, opts);
       downloadBlob(blob, filename);
     } else {
-      buildResumeDocx(doc, resume.label).then(({ blob, filename }) => downloadBlob(blob, filename));
+      buildResumeDocx(doc, resume.label, opts).then(({ blob, filename }) => downloadBlob(blob, filename));
     }
     setOverflowOpen(null);
   }

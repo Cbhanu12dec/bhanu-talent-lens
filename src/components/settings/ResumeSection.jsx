@@ -1,9 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { saveProfileInfo } from '../../lib/firestore.js';
+import { RESUME_DEFAULTS } from '../../lib/exportPrefs.js';
 import { Section, Row, ChoiceGroup, SaveBar, Toggle } from '../ui/Primitives.jsx';
 import { useToast } from '../ui/Toast.jsx';
-
-export const RESUME_DEFAULTS = { pageSize: 'letter' };
 
 const PAGE_PREVIEW = ratio => (
   <span className="page-prev" style={{ aspectRatio: ratio }} aria-hidden="true">

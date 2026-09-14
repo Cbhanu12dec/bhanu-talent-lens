@@ -10,6 +10,7 @@ import {
 } from '../lib/claude.js';
 import { buildResumePdf, downloadBlob } from '../lib/pdf.js';
 import { buildResumeDocx } from '../lib/docx.js';
+import { exportOptions } from '../lib/exportPrefs.js';
 import { diffLines, resumeToLines } from '../lib/diff.js';
 import { flattenResume } from '../lib/resumeFormat.js';
 import { createGmailDraft } from '../lib/gmail.js';
@@ -563,11 +564,12 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
 
   function handleDownload(format) {
     if (!version?.content) return;
+    const opts = exportOptions(profileInfo);
     if (format === 'pdf') {
-      const { blob, filename } = buildResumePdf(version.content, exportTitle());
+      const { blob, filename } = buildResumePdf(version.content, exportTitle(), opts);
       downloadBlob(blob, filename);
     } else {
-      buildResumeDocx(version.content, exportTitle()).then(({ blob, filename }) => downloadBlob(blob, filename));
+      buildResumeDocx(version.content, exportTitle(), opts).then(({ blob, filename }) => downloadBlob(blob, filename));
     }
     notify?.({ kind: 'good', title: `${format.toUpperCase()} downloaded`, detail: exportTitle() });
   }
@@ -604,7 +606,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     try {
       const token = await ensureGmailToken();
       if (!token) throw new Error('Gmail authorization was not granted.');
-      const { base64, filename, mimeType } = buildResumePdf(version.content, exportTitle());
+      const { base64, filename, mimeType } = buildResumePdf(version.content, exportTitle(), exportOptions(profileInfo));
       await createGmailDraft({ accessToken: token, from: profileInfo.sendingEmail, to: emailTo, subject: emailSubject, body: emailBody, attachment: { filename, mimeType, base64 } });
       setSendSuccess(true);
     } catch (err) {
