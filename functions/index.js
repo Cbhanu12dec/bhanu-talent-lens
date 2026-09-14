@@ -377,6 +377,83 @@ function requirementTerms(name) {
   return { terms: [...new Set(terms)], phrase: raw.trim() };
 }
 
+// Boilerplate that appears in almost every posting. These are frequent enough
+// to dominate a raw frequency ranking while carrying no matching value, so
+// they are excluded on top of REQ_STOPWORDS.
+const JD_BOILERPLATE = new Set([
+  'job','description','responsibilities','responsibility','qualifications','requirements','requirement',
+  'candidate','candidates','applicant','applicants','position','positions','opportunity','opportunities',
+  'company','companies','client','clients','customer','customers','business','businesses',
+  'team','teams','teamwork','member','members','environment','environments','culture',
+  'looking','seeking','join','apply','applying','application','applications','hiring','hire',
+  'benefits','salary','compensation','insurance','paid','vacation','remote','hybrid','onsite','office',
+  'please','will','can','may','also','well','other','others','new','strongly','highly','ideal','ideally',
+  'responsible','duties','include','includes','included','ensure','ensuring','help','helping',
+  'day','days','week','weeks','month','months','time','full','part','per','their','them','they','who',
+  'what','when','where','which','all','any','more','most','both','each','every','some','into','out',
+  'up','down','over','under','about','than','then','there','here','it','its','if','but','not','no',
+  'employment','employer','equal','diversity','inclusive','opportunityemployer','eeo','veteran',
+  'degree','bachelor','bachelors','master','masters','field','university','college','education',
+  'communication','written','verbal','interpersonal','collaborate','collaborative','collaboration',
+  'passion','passionate','motivated','driven','dynamic','fast','paced','growth','impact','mission',
+]);
+
+/**
+ * Tokens a posting marks as proper nouns or acronyms. A JD often names a
+ * required technology exactly once ("Strong SQL skills"), so frequency alone
+ * would drop it; this lets those through without admitting prose filler.
+ */
+function distinctiveJdTokens(jdText) {
+  const raw = String(jdText || '');
+  const out = new Set();
+  const clean = t => t.toLowerCase().replace(/^[./-]+|[./-]+$/g, '');
+
+  // Acronyms and tokens carrying tech punctuation: SQL, AWS, S3, CI/CD, .NET.
+  for (const m of raw.match(/\b[A-Z][A-Z0-9]+(?:[+#./-][A-Za-z0-9]+)*\b|\b[A-Za-z]+[+#]{1,2}\b/g) || []) {
+    const t = clean(m);
+    if (t.length >= 2) out.add(t);
+  }
+
+  // Capitalised words that are not the first word of a line, bullet or
+  // sentence — that position is why "Design" and "Own" are not picked up.
+  for (const chunk of raw.split(/[.;:!?\n\r]+/)) {
+    const words = chunk.trim().replace(/^[-*•\s]+/, '').split(/\s+/).slice(1);
+    for (const w of words) {
+      // Trailing commas and brackets are why "(S3, Glue, Lambda)" was missed.
+      const bare = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9+#]+$/g, '');
+      if (/^[A-Z][A-Za-z0-9+#./-]{1,}$/.test(bare)) out.add(clean(bare));
+    }
+  }
+  return out;
+}
+
+/**
+ * Ranks the JD's own distinctive vocabulary straight from the raw posting.
+ * This is a deterministic fallback so the tailor audit has something
+ * objective to grade against even when the model under-reports what the JD
+ * asked for. Frequency-ranked because a posting repeats what it cares about.
+ */
+function extractJdTerms(jdText, limit = 24) {
+  const distinctive = distinctiveJdTokens(jdText);
+  const counts = new Map();
+  for (const t of tokenize(jdText)) {
+    // Two-character tokens are only worth keeping when the posting named them
+    // as a product or acronym — S3, Go, C#.
+    if (t.length < 3 && !distinctive.has(t)) continue;
+    if (t.length < 2 || /^\d+$/.test(t)) continue;
+    if (REQ_STOPWORDS.has(t) || JD_BOILERPLATE.has(t)) continue;
+    if (t.includes('-') && t.split('-').every(p => !p || REQ_STOPWORDS.has(p) || JD_BOILERPLATE.has(p))) continue;
+    counts.set(t, (counts.get(t) || 0) + 1);
+  }
+  return [...counts.entries()]
+    // A term mentioned once is only kept when the posting itself marked it out
+    // as a name or acronym; otherwise it is almost always prose.
+    .filter(([t, n]) => n >= 2 || distinctive.has(t))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([t]) => t);
+}
+
 function matchRequirement(name, text) {
   const { terms, phrase } = requirementTerms(name);
   if (!terms.length) return { strength: 'MISSING', mentions: 0, terms: [] };
@@ -551,6 +628,9 @@ exports.claudeProxy = onCall({ secrets: [ANTHROPIC_API_KEY], cors: true, timeout
       const promptList = (prompts && prompts.length) ? prompts.map(p => `- ${p}`).join('\n') : '- (none specified)';
       const MIN_ACCEPTABLE_ATS = 85;
       const effectiveTarget = Math.max(atsTarget || 92, MIN_ACCEPTABLE_ATS);
+      // Independent of anything the model reports, so the coverage audit has a
+      // fixed target the model cannot influence.
+      const jdTerms = extractJdTerms(jdText);
 
       const styleLines = [
         TAILOR_MODES[mode],
@@ -632,7 +712,7 @@ Respond in EXACTLY this format, nothing before or after — no markdown fences, 
 
 ROLE_SIMILARITY: <integer 0-100>
 ATS_SCORE: <integer 0-100, your honest estimate after the audit above>
-REQUIRED_KEYWORDS: <a single JSON array on one line of the 10-25 most important literal terms this JD requires that the candidate's evidence genuinely supports, exactly as the JD words them, e.g. ["Kubernetes","CI/CD","distributed systems"]. These are verified verbatim against your output, so only list terms you actually worked into the resume text.>
+REQUIRED_KEYWORDS: <a single JSON array on one line of the 12-25 most important literal terms THIS JD REQUIRES that the candidate's evidence genuinely supports, exactly as the JD words them, e.g. ["Kubernetes","CI/CD","distributed systems"]. Derive this list from the job description BEFORE you judge your own draft: it is the requirement list you were working to, not a description of what you managed to fit in. Your output is then audited against it, and anything missing is sent back to you to fix, so leaving a supported requirement off this list does not help you — it only hides a gap that the audit would otherwise have caught.>
 ATS_BREAKDOWN: <a single JSON object, real JSON on one line, with these exact integer 0-100 fields: {"keywordMatch": 92, "formatting": 95, "experienceRelevance": 81, "actionVerbs": 94, "quantification": 72, "leadership": 90, "technicalDepth": 84, "industryMatch": 88, "seniority": 91}. Score each dimension honestly and independently — they should not all just mirror the overall score. "formatting" reflects structural ATS-friendliness of the output itself (plain sections, no tables) and should normally score high since this schema is inherently ATS-safe. "quantification" reflects how many bullets have concrete numbers/metrics — score this honestly low if the original resume didn't have many to work with, since you must not invent metrics that aren't there.>
 ===RESUME_JSON===
 <a single JSON object with this exact shape — real JSON, not a string containing JSON:
@@ -709,7 +789,10 @@ Include only the sections that make sense for this resume's actual content — d
           throw new Error('Tailored resume came back with an unexpected shape — please try again.');
         }
         const resume = sanitizeResumeContent(parsedResume);
-        const audit = auditAts(resume, requiredKeywords);
+        // Graded against the union of what the model said the JD required and
+        // what the JD itself repeats. The server-derived half is the part the
+        // model cannot quietly shrink to flatter its own score.
+        const audit = auditAts(resume, [...new Set([...requiredKeywords, ...jdTerms])]);
         const reconciled = reconcileAtsScore(score, audit);
         if (breakdown && audit.keywordCoverage != null) {
           breakdown.keywordMatch = audit.keywordCoverage;
@@ -757,8 +840,22 @@ ${resumeText}`;
         return r.audit.weakOpenerBullets.length > 0 || r.audit.pronounBullets.length > 0 || r.audit.buzzwordBullets.length > 0;
       };
 
-      if (allowRetry !== false && needsRepair(best) && best.roleSimilarity >= 60) {
+      // Missing keywords are fixable at any role distance — the evidence is
+      // already in the resume, it just isn't phrased in the JD's terms. Only
+      // the score/hygiene triggers are gated on role similarity, since those
+      // really are hopeless when the role is fundamentally different.
+      const repairIsWorthIt = (r) =>
+        r.audit.missingKeywords.length > 0 || r.roleSimilarity >= 60;
+
+      // Two passes rather than one: the first repair usually clears hygiene
+      // and the obvious gaps, and a second is what actually closes the long
+      // tail of JD terms. Matches the build-from-scratch flow, which loops
+      // until coverage converges instead of stopping after one attempt.
+      const MAX_REPAIRS = 2;
+      for (let attempt = 0; allowRetry !== false && attempt < MAX_REPAIRS; attempt++) {
+        if (!needsRepair(best) || !repairIsWorthIt(best)) break;
         const repairList = atsRepairInstruction(best.audit);
+        if (!repairList && best.atsScore >= effectiveTarget) break;
         const retryUserContent = `${baseUserContent}
 
 Your previous attempt was audited mechanically against the resume text you produced. Estimated score ${best.modelScore}/100, measured ${best.atsScore}/100 against a ${effectiveTarget} target${best.audit.keywordCoverage != null ? `, keyword coverage ${best.audit.keywordCoverage}%` : ''}. Produce a corrected version that fixes every item below while keeping everything already working:
@@ -766,10 +863,12 @@ ${repairList || 'Raise overall JD alignment and keyword coverage.'}
 
 Cut lower-value bullets to make room if needed. Do not fabricate anything not already grounded in the original resume — the truthfulness constraint still applies without exception.`;
         try {
-          const retry = await runPass(retryUserContent, 60000, 'tailor_retry');
-          if (retry.atsScore > best.atsScore) best = retry;
+          const retry = await runPass(retryUserContent, 60000, `tailor_retry_${attempt + 1}`);
+          if (retry.atsScore <= best.atsScore) break; // no progress, stop spending calls
+          best = retry;
         } catch (e) {
-          console.error('ATS retry pass failed or timed out, returning first-pass result instead:', e.message);
+          console.error('ATS retry pass failed or timed out, keeping current draft:', e.message);
+          break;
         }
       }
 
