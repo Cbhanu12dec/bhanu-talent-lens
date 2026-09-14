@@ -1091,6 +1091,91 @@ exports.getBillingSettingsPublic = onCall({ cors: true }, async (request) => {
   return await getBillingSettings();
 });
 
+// Subcollections under users/{uid}, verified against every collection(...)
+// call in src/lib. Firestore has no recursive delete in the admin document
+// API and deleting a document does NOT delete its subcollections, so both
+// export and delete have to walk this list explicitly. Anything added here
+// later must be added to this list or it will be silently orphaned.
+const USER_SUBCOLLECTIONS = [
+  'resumes', 'resumeVersions', 'careerProfile', 'jobDescriptions',
+  'agentRuns', 'customDomains', 'billingHistory'
+];
+
+function serializeValue(v) {
+  if (v && typeof v.toDate === 'function') return v.toDate().toISOString();
+  if (Array.isArray(v)) return v.map(serializeValue);
+  if (v && typeof v === 'object' && v.constructor === Object) {
+    return Object.fromEntries(Object.entries(v).map(([k, val]) => [k, serializeValue(val)]));
+  }
+  return v;
+}
+
+/**
+ * Returns everything stored against the caller's account as plain JSON.
+ * Scoped to request.auth.uid only — there is no parameter to read another
+ * user's data, so this cannot be turned into an enumeration endpoint.
+ */
+exports.exportUserData = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const uid = request.auth.uid;
+  const userRef = db.collection('users').doc(uid);
+
+  const [userSnap, ...subSnaps] = await Promise.all([
+    userRef.get(),
+    ...USER_SUBCOLLECTIONS.map(c => userRef.collection(c).get())
+  ]);
+
+  const profile = userSnap.exists ? serializeValue(userSnap.data()) : {};
+  const collections = {};
+  const counts = {};
+  USER_SUBCOLLECTIONS.forEach((name, i) => {
+    collections[name] = subSnaps[i].docs.map(d => ({ id: d.id, ...serializeValue(d.data()) }));
+    counts[name] = subSnaps[i].size;
+  });
+
+  return {
+    exportedAt: new Date().toISOString(),
+    account: {
+      uid,
+      email: request.auth.token.email || null,
+      emailVerified: !!request.auth.token.email_verified
+    },
+    profile,
+    ...collections,
+    counts,
+    note: 'Payment card details are held by Stripe and are never stored by ResumeCraft Pro, so they cannot appear in this export.'
+  };
+});
+
+/**
+ * Irreversibly removes the caller's account. Firestore data is deleted before
+ * the auth record, so a failure part way through leaves the user able to sign
+ * in and retry rather than orphaning their documents.
+ */
+exports.deleteAccount = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const uid = request.auth.uid;
+  const userRef = db.collection('users').doc(uid);
+
+  for (const name of USER_SUBCOLLECTIONS) {
+    // Paged rather than one batch: a heavy account can exceed the 500-write
+    // batch limit, which would otherwise fail the whole deletion.
+    let docs;
+    do {
+      const snap = await userRef.collection(name).limit(400).get();
+      docs = snap.docs;
+      if (!docs.length) break;
+      const batch = db.batch();
+      docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    } while (docs.length === 400);
+  }
+
+  await userRef.delete();
+  await admin.auth().deleteUser(uid);
+  return { ok: true };
+});
+
 exports.getAdminStats = onCall({ cors: true }, async (request) => {
   requireAdmin(request);
   const [usersCount, couponsCount] = await Promise.all([

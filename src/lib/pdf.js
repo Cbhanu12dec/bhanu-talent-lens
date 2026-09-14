@@ -17,8 +17,8 @@ function splitLabelLine(line) {
   return m ? { label: m[1] + ':', rest: m[2] } : null;
 }
 
-export function buildResumePdf(resume, title = 'Resume') {
-  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+export function buildResumePdf(resume, title = 'Resume', opts = {}) {
+  const doc = new jsPDF({ unit: 'pt', format: opts.pageSize === 'a4' ? 'a4' : 'letter' });
   const marginX = 36; // 0.5in on all sides
   const marginY = 36;
   const pageWidth = doc.internal.pageSize.getWidth();

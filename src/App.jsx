@@ -6,8 +6,7 @@ import Topbar from './components/Topbar.jsx';
 import DashboardOverview from './components/DashboardOverview.jsx';
 import ResumeLibraryView from './components/ResumeLibraryView.jsx';
 import BillingView from './components/BillingView.jsx';
-import ProfileSettingsView from './components/ProfileSettingsView.jsx';
-import AIPreferencesView from './components/AIPreferencesView.jsx';
+import SettingsView from './components/SettingsView.jsx';
 import ComingSoonView from './components/ComingSoonView.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import AdminView from './components/AdminView.jsx';
@@ -18,6 +17,8 @@ import InsightsView from './components/InsightsView.jsx';
 import TemplatesView from './components/TemplatesView.jsx';
 import { getProfileInfo, listResumes } from './lib/firestore.js';
 import { ensureAccount } from './lib/billing.js';
+import { useHashRoute } from './lib/useHashRoute.js';
+import { ToastProvider } from './components/ui/Toast.jsx';
 
 const ADMIN_EMAIL = 'cbhanu12dec@gmail.com';
 // Views that require admin. The real boundary is server-side `requireAdmin`;
@@ -48,14 +49,26 @@ function Workspace() {
   const { user } = useAuth();
   const uid = user.uid;
   const [checkoutStatus] = useState(getCheckoutStatusFromUrl);
-  const [view, setViewRaw] = useState(checkoutStatus ? 'billing' : 'dashboard');
+  const { view, sub, navigate, replace } = useHashRoute(checkoutStatus ? 'billing' : 'dashboard');
   const isAdmin = user?.email === ADMIN_EMAIL;
 
   // §0 route guard: a non-admin asking for an admin view is sent to the
   // dashboard rather than shown a 403 — a 403 confirms the route exists.
-  const setView = useCallback(next => {
-    setViewRaw(ADMIN_VIEWS.has(next) && !isAdmin ? 'dashboard' : next);
-  }, [isAdmin]);
+  const setView = useCallback((next, nextSub) => {
+    navigate(ADMIN_VIEWS.has(next) && !isAdmin ? 'dashboard' : next, nextSub);
+  }, [isAdmin, navigate]);
+
+  // Land on a real URL so the first view is shareable and Back behaves.
+  useEffect(() => {
+    if (!window.location.hash) replace(checkoutStatus ? 'billing' : 'dashboard');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Admin views are also guarded on arrival, not just on navigation, so a
+  // pasted #/admin link cannot mount the view for a non-admin.
+  useEffect(() => {
+    if (ADMIN_VIEWS.has(view) && !isAdmin) replace('dashboard');
+  }, [view, isAdmin, replace]);
 
   const [profileInfo, setProfileInfo] = useState({});
   const [resumes, setResumes] = useState([]);
@@ -100,12 +113,12 @@ function Workspace() {
       attempts += 1;
       const info = await refreshProfile();
       if (startingCredits != null && info.credits > startingCredits) {
-        notify({ kind: 'good', title: 'Payment successful', detail: `+${info.credits - startingCredits} credits added to your account` });
+        notify({ kind: 'good', category: 'billing', title: 'Payment successful', detail: `+${info.credits - startingCredits} credits added to your account` });
         clearInterval(id);
         return;
       }
       if (attempts >= 8) {
-        notify({ kind: 'warn', title: 'Still confirming your payment', detail: 'This is taking longer than usual — use "Refresh balance" on the Billing page in a moment' });
+        notify({ kind: 'warn', category: 'billing', title: 'Still confirming your payment', detail: 'This is taking longer than usual — use "Refresh balance" on the Billing page in a moment' });
         clearInterval(id);
       }
     }, 2500);
@@ -113,7 +126,10 @@ function Workspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutStatus]);
 
-  function notify({ kind, title, detail }) {
+  // Categories the user has switched off in Settings are dropped here rather
+  // than filtered at render time, so a muted category leaves no unread count.
+  function notify({ kind, title, detail, category = 'tailoring' }) {
+    if (category !== 'security' && profileInfo.notifications?.[category] === false) return;
     setNotifications(prev => [{ kind, title, detail, unread: true }, ...prev].slice(0, 20));
   }
 
@@ -123,6 +139,11 @@ function Workspace() {
   }
 
   const state = { profileInfo, setProfileInfo, resumes, setResumes, activeResumeId, setActiveResumeId };
+
+  const billingProps = {
+    uid, email: user?.email, profileInfo, credits, creditsTotal,
+    resumeCount: resumes.length, checkoutStatus, onRefresh: refreshProfile, notify
+  };
 
   return (
     <div className="shell">
@@ -151,13 +172,14 @@ function Workspace() {
             <ResumeLibraryView uid={uid} state={state} setView={setView} notify={notify} />
           </Keep>
           <Keep active={view === 'billing'}>
-            <BillingView uid={uid} credits={credits} creditsTotal={creditsTotal} checkoutStatus={checkoutStatus} active={view === 'billing'} onRefresh={refreshProfile} />
+            <BillingView {...billingProps} active={view === 'billing'} onNavigate={setView} />
           </Keep>
-          <Keep active={view === 'settings'}>
-            <ProfileSettingsView uid={uid} state={state} />
-          </Keep>
-          <Keep active={view === 'aiprefs'}>
-            <AIPreferencesView uid={uid} state={state} />
+          <Keep active={view === 'settings' || view === 'aiprefs'}>
+            <SettingsView
+              uid={uid} state={state} navigate={setView}
+              sub={view === 'aiprefs' ? 'ai' : sub}
+              billingProps={billingProps}
+            />
           </Keep>
           <Keep active={view === 'applications'}>
             <ComingSoonView title="Applications" sub="Track every application end to end." icon="📋"
@@ -202,7 +224,9 @@ function Gate() {
 export default function App() {
   return (
     <AuthProvider>
-      <Gate />
+      <ToastProvider>
+        <Gate />
+      </ToastProvider>
     </AuthProvider>
   );
 }

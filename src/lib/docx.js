@@ -70,7 +70,7 @@ function paragraphsForEntry(entry) {
   return out;
 }
 
-export async function buildResumeDocx(resume, title = 'Resume') {
+export async function buildResumeDocx(resume, title = 'Resume', opts = {}) {
   const children = [];
 
   children.push(new Paragraph({
@@ -108,7 +108,12 @@ export async function buildResumeDocx(resume, title = 'Resume') {
     (section.entries || []).forEach(entry => children.push(...paragraphsForEntry(entry)));
   });
 
-  const doc = new Document({ sections: [{ properties: { page: { margin: { top: PAGE_MARGIN_TWIPS, right: PAGE_MARGIN_TWIPS, bottom: PAGE_MARGIN_TWIPS, left: PAGE_MARGIN_TWIPS } } }, children }] });
+  // A4 is 11906x16838 twips; Word defaults to Letter when size is omitted.
+  const page = {
+    margin: { top: PAGE_MARGIN_TWIPS, right: PAGE_MARGIN_TWIPS, bottom: PAGE_MARGIN_TWIPS, left: PAGE_MARGIN_TWIPS },
+    ...(opts.pageSize === 'a4' ? { size: { width: 11906, height: 16838 } } : {})
+  };
+  const doc = new Document({ sections: [{ properties: { page }, children }] });
   const blob = await Packer.toBlob(doc);
   const base64 = await blobToBase64(blob);
   return {

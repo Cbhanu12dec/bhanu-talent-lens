@@ -2,8 +2,9 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   onAuthStateChanged, signInWithPopup, signOut, GoogleAuthProvider,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  sendPasswordResetEmail, updateProfile, linkWithPopup,
-  updatePassword, EmailAuthProvider, reauthenticateWithCredential
+  sendPasswordResetEmail, updateProfile, linkWithPopup, unlink,
+  updatePassword, EmailAuthProvider, reauthenticateWithCredential,
+  reauthenticateWithPopup
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase.js';
 
@@ -19,7 +20,9 @@ function friendlyAuthError(err) {
     'auth/user-not-found': 'No account found with that email.',
     'auth/too-many-requests': 'Too many attempts — please wait a moment and try again.',
     'auth/popup-closed-by-user': 'Sign-in window was closed before finishing.',
-    'auth/credential-already-in-use': 'That Google account is already linked to a different ResumeCraft Pro account.'
+    'auth/credential-already-in-use': 'That Google account is already linked to a different ResumeCraft Pro account.',
+    'auth/no-such-provider': 'That account is not connected.',
+    'auth/requires-recent-login': 'For security, please sign in again before making this change.'
   };
   return map[err?.code] || err?.message || 'Something went wrong. Please try again.';
 }
@@ -115,11 +118,54 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const providerIds = user?.providerData?.map(p => p.providerId) || [];
+
+  async function linkProvider(providerId) {
+    if (providerId !== 'google.com') throw new Error('That provider is not configured.');
+    try {
+      const result = await linkWithPopup(auth.currentUser, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) setAccessToken(credential.accessToken);
+      setUser({ ...auth.currentUser });
+      return result;
+    } catch (err) {
+      throw new Error(friendlyAuthError(err));
+    }
+  }
+
+  // Refused when it would leave the account with no way to sign in at all.
+  async function unlinkProvider(providerId) {
+    if (providerIds.length <= 1) throw new Error('This is your only sign-in method. Add another before removing it.');
+    try {
+      await unlink(auth.currentUser, providerId);
+      if (providerId === 'google.com') setAccessToken(null);
+      setUser({ ...auth.currentUser });
+    } catch (err) {
+      throw new Error(friendlyAuthError(err));
+    }
+  }
+
+  // Deleting an account and revoking sessions both require a fresh credential.
+  async function reauthenticate(password) {
+    if (!auth.currentUser) throw new Error('Not signed in.');
+    try {
+      if (password && providerIds.includes('password')) {
+        const cred = EmailAuthProvider.credential(auth.currentUser.email, password);
+        await reauthenticateWithCredential(auth.currentUser, cred);
+      } else {
+        await reauthenticateWithPopup(auth.currentUser, googleProvider);
+      }
+    } catch (err) {
+      throw new Error(friendlyAuthError(err));
+    }
+  }
+
   return (
     <AuthContext.Provider value={{
-      user, loading, accessToken, hasPasswordProvider,
+      user, loading, accessToken, hasPasswordProvider, providerIds,
       signUpWithEmail, signInWithEmail, resetPassword, loginWithGoogle,
-      ensureGmailToken, logout, changePassword
+      ensureGmailToken, logout, changePassword,
+      linkProvider, unlinkProvider, reauthenticate
     }}>
       {children}
     </AuthContext.Provider>
