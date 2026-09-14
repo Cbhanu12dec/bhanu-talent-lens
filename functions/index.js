@@ -982,6 +982,8 @@ ${resumeText}`;
       const { jdText, resumeText } = payload;
       const prompt = `Analyze this job description in detail, and compare it against the candidate's resume. Return ONLY raw JSON, no markdown fences, in this exact shape:
 {
+  "roleTitle": "Senior Data Engineer",
+  "company": "Acme Bank",
   "requiredSkills": ["skill1", "skill2"],
   "preferredSkills": ["skill1"],
   "responsibilities": ["short responsibility phrase"],
@@ -992,6 +994,7 @@ ${resumeText}`;
   "missingKeywords": { "Programming": ["term"], "Cloud": ["term"], "Soft Skills": ["term"] }
 }
 techCategories: only include categories that are actually relevant to this JD's tech stack (skip empty/irrelevant ones — don't force all four). Add other categories beyond Cloud/AI/Security/DevOps if the JD's stack calls for it (e.g. "Frontend", "Data").
+roleTitle: the job title this posting is hiring for, exactly as the posting words it, with no seniority guessing. company: the hiring company's name. Use an empty string for either one if the posting genuinely does not state it — never guess and never substitute a placeholder.
 matchMatrix: cover the 6-10 most important JD requirements. status is "strong" (resume clearly demonstrates it), "partial" (adjacent/related experience but not exact), or "missing" (not evidenced in the resume at all). Base this strictly on what the resume actually says — do not assume.
 missingKeywords: every term from matchMatrix with status "missing", grouped into sensible categories (only include categories that have at least one term). These are meant to be shown to the candidate as things to consider genuinely gaining or emphasizing — not fabricating.
 

@@ -7,7 +7,7 @@ const MUTED = [0, 0, 0];         // contact line, subtitles, dates
 const LINK = [17, 85, 204];      // only clickable parts get colour, so a link reads as one
 
 function sanitizeFilename(name) {
-  return name.replace(/[^a-z0-9\-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'resume';
+  return name.replace(/[^a-z0-9\-_]+/gi, '_').replace(/_{2,}/g, '_').replace(/^_+|_+$/g, '') || 'resume';
 }
 
 // "Label: rest of line" → bold label + normal rest, common in

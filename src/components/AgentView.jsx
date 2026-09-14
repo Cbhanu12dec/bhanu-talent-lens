@@ -455,6 +455,11 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
       try {
         intel = await getJdBreakdown({ jdText: jdText.trim(), resumeText: baseResume.text });
         setJdIntel(intel);
+        // The scratch pipeline gets these from parseJD; tailoring has no parse
+        // step, so they come off the breakdown call that already runs here.
+        if (intel?.roleTitle || intel?.company) {
+          setJobDescription({ title: intel.roleTitle || '', company: intel.company || '' });
+        }
       } catch (err) {
         console.warn('JD breakdown failed (non-fatal):', err);
       }

@@ -13,7 +13,7 @@ const PAGE_MARGIN_TWIPS = 720;
 const CONTENT_WIDTH_TWIPS = 12240 - PAGE_MARGIN_TWIPS * 2;
 
 function sanitizeFilename(name) {
-  return name.replace(/[^a-z0-9\-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'resume';
+  return name.replace(/[^a-z0-9\-_]+/gi, '_').replace(/_{2,}/g, '_').replace(/^_+|_+$/g, '') || 'resume';
 }
 
 function splitLabelLine(line) {
