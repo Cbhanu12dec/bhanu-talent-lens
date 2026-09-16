@@ -18,9 +18,9 @@ export async function analyzeJD({ jdText, resumeText }) {
   return json; // { matched, gaps, summary, atsScore }
 }
 
-export async function tailorResume({ jdText, resumeText, gaps, prompts, atsTarget, mode, intensity, aggressiveness, keywordDensity, bulletLength, lockedSections, allowRetry }) {
+export async function tailorResume({ jdText, resumeText, gaps, prompts, atsTarget, mode, intensity, aggressiveness, keywordDensity, bulletLength, lockedSections, allowRetry, jdIntel }) {
   try {
-    const { json, creditsRemaining, cached } = await proxy('tailor', { jdText, resumeText, gaps, prompts, atsTarget, mode, intensity, aggressiveness, keywordDensity, bulletLength, lockedSections, allowRetry });
+    const { json, creditsRemaining, cached } = await proxy('tailor', { jdText, resumeText, gaps, prompts, atsTarget, mode, intensity, aggressiveness, keywordDensity, bulletLength, lockedSections, allowRetry, jdIntel });
     if (!json || !json.resume || !json.resume.name || !Array.isArray(json.resume.sections)) {
       throw new Error('Tailoring response was missing resume data — the deployed Cloud Function may be out of date. Try "firebase deploy --only functions".');
     }
@@ -32,6 +32,7 @@ export async function tailorResume({ jdText, resumeText, gaps, prompts, atsTarge
         keywordCoverage: json.atsAudit?.keywordCoverage,
         missing: json.atsAudit?.missingKeywords,
         shallowInserts: json.atsAudit?.shallowInserts,
+        fabricatedClaims: json.atsAudit?.fabricatedClaims,
       });
     }
     return { ...json, cached, creditsRemaining }; // { resume, atsScore, creditsRemaining }
