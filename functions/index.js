@@ -269,11 +269,7 @@ function collectExperienceBullets(resume) {
     .filter(b => typeof b === 'string' && b.trim());
 }
 
-// How essential a term is to the role. Frequency alone gets this wrong: a
-// once-mentioned licence can gate the application while a four-times-repeated
-// piece of filler language does not, so the semantic level outranks the count.
-const LEVEL_RANK = { 'must-have': 3, differentiator: 2, 'nice-to-have': 1 };
-const DEFAULT_LEVEL = 'differentiator';
+const TIER_RANK = { critical: 3, important: 2, supporting: 1 };
 const escapeRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // "+", "#" and "." are part of tokens like C++, C# and .NET, so \b is wrong
@@ -363,28 +359,19 @@ function detectShallowInserts(bullets, originalBullets, requiredTerms, threshold
 }
 
 /**
- * @param requiredKeywords plain strings, or {term, level, count} from
- *        mergeRequiredTerms. Flow B passes [] and is unaffected.
+ * @param requiredKeywords plain strings, or {term, tier} from extractJdTerms.
  * @param originalBullets  source-resume bullet lines, for rewrite verification.
- * @param domainClaims     Fix 6b terms that may only appear if the source
- *                         resume already evidences them.
  */
-function auditAts(resume, requiredKeywords = [], originalBullets = null, domainClaims = []) {
+function auditAts(resume, requiredKeywords = [], originalBullets = null) {
   const text = resumeToPlainText(resume);
   const seen = new Map();
   for (const k of requiredKeywords || []) {
     const term = String((k && k.term) || k || '').trim();
     if (!term) continue;
-    const level = (k && k.level) || DEFAULT_LEVEL;
-    const count = (k && k.count) || 0;
-    const key = term.toLowerCase();
-    const prev = seen.get(key);
-    // Same term from both sources keeps whichever level ranks higher.
-    if (!prev || LEVEL_RANK[level] > LEVEL_RANK[prev.level]) {
-      seen.set(key, { term, level, count: Math.max(count, prev?.count || 0) });
-    } else if (count > prev.count) {
-      seen.set(key, { ...prev, count });
-    }
+    const tier = (k && k.tier) || 'important';
+    const prev = seen.get(term.toLowerCase());
+    // Same term from both sources keeps whichever tier ranks higher.
+    if (!prev || TIER_RANK[tier] > TIER_RANK[prev.tier]) seen.set(term.toLowerCase(), { term, tier });
   }
   const required = [...seen.values()];
 
@@ -393,29 +380,17 @@ function auditAts(resume, requiredKeywords = [], originalBullets = null, domainC
   const keywordCoverage = required.length
     ? Math.round(((required.length - missing.length) / required.length) * 100)
     : null;
-  // must-have first regardless of how often the posting said it.
-  const byImportance = (a, b) =>
-    LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || b.count - a.count || a.term.localeCompare(b.term);
+  const byTier = (a, b) => TIER_RANK[b.tier] - TIER_RANK[a.tier] || a.term.localeCompare(b.term);
 
   const bullets = collectExperienceBullets(resume);
   const quantifiedBullets = bullets.filter(b => /\d/.test(b)).length;
   const quantificationRatio = bullets.length ? quantifiedBullets / bullets.length : 0;
 
-  // Fix 6b enforcement: a named framework, certification or compliance regime
-  // that the source resume never mentions cannot appear in the rewrite. This
-  // is the mechanical half of the guardrail; the prompt is the other half.
-  const sourceText = (originalBullets || []).join('\n');
-  const inSource = sourceText ? presenceChecker(sourceText) : null;
-  const fabricatedClaims = inSource
-    ? [...new Set((domainClaims || []).map(t => String(t || '').trim()).filter(Boolean))]
-      .filter(t => present(t) && !inSource(t))
-    : [];
-
   return {
     totalRequired: required.length,
     keywordCoverage,
-    missingKeywords: missing.sort(byImportance).map(m => m.term),
-    missingRanked: missing.sort(byImportance),
+    missingKeywords: missing.sort(byTier).map(m => m.term),
+    missingByTier: missing.sort(byTier),
     totalBullets: bullets.length,
     quantifiedBullets,
     quantificationRatio,
@@ -423,7 +398,6 @@ function auditAts(resume, requiredKeywords = [], originalBullets = null, domainC
     weakOpenerBullets: bullets.filter(b => WEAK_OPENER_RE.test(b.trim())),
     buzzwordBullets: bullets.filter(b => BUZZWORD_RE.test(b)),
     aiSignalWords: bullets.flatMap(b => b.match(AI_SIGNAL_RE) || []),
-    fabricatedClaims,
     shallowInsertBullets: originalBullets
       ? detectShallowInserts(bullets, originalBullets, required.map(r => r.term))
       : [],
@@ -442,23 +416,19 @@ function reconcileAtsScore(modelScore, audit) {
 
 function atsRepairInstruction(audit) {
   const issues = [];
-  // A fabricated credential is the most damaging failure here, so it leads.
-  if ((audit.fabricatedClaims || []).length) {
-    issues.push(`Your draft claims ${audit.fabricatedClaims.map(t => `"${t}"`).join(', ')}, which appears nowhere in the candidate's original resume. These are domain-typical terms, not evidence. Remove every one of them and re-state what the candidate actually did in that bullet.`);
-  }
-  // Rewrite failures next: fixing wording is pointless if the bullet is still
+  // Rewrite failures lead: fixing wording is pointless if the bullet is still
   // the original sentence with a term dropped into it.
   for (const s of (audit.shallowInsertBullets || []).slice(0, 4)) {
     issues.push(`Bullet ${s.index} was flagged as keyword-inserted, not rewritten (unchanged: ${s.overlap}% of the original wording): "${s.bullet.slice(0, 90)}". Re-extract the underlying fact from the original bullet and rebuild the sentence structure around it — do not keep the original sentence shape and swap in "${s.keyword}".`);
   }
   if (audit.missingKeywords.length) {
-    // Ranked when the caller supplied levels (Flow A); plain otherwise (Flow B
+    // Tiered when the caller supplied tiers (Flow A); plain otherwise (Flow B
     // substitutes its own importance-sorted requirement names).
-    const ranked = audit.missingRanked || [];
-    const label = ranked.length
-      ? ranked.map(m => (m.level === 'must-have' ? `${m.term} (must-have)` : m.level === 'nice-to-have' ? `${m.term} (nice-to-have)` : m.term)).join(', ')
+    const tiered = audit.missingByTier || [];
+    const label = tiered.length
+      ? tiered.map(m => (m.tier === 'critical' ? `${m.term} (critical)` : m.tier === 'supporting' ? `${m.term} (supporting)` : m.term)).join(', ')
       : audit.missingKeywords.join(', ');
-    issues.push(`These required JD keywords do NOT appear anywhere in your draft, must-haves first. Work each one in verbatim on a bullet whose evidence genuinely supports it, or leave it out if no bullet does: ${label}.`);
+    issues.push(`These required JD keywords do NOT appear anywhere in your draft, most important first. Work each one in verbatim wherever the candidate's real evidence supports it, or drop it only if genuinely unsupported: ${label}.`);
   }
   if (audit.totalBullets && audit.quantificationRatio < ATS_TARGET_QUANT_RATIO) {
     issues.push(`Only ${audit.quantifiedBullets} of ${audit.totalBullets} experience bullets contain a concrete number. Raise this to at least half by surfacing scale, volume, team size, timeline, or percentage figures already implied by the source resume. Never invent a figure that is not supported.`);
@@ -608,39 +578,8 @@ function extractJdTerms(jdText, limit = 24) {
     .map(([term, count]) => ({
       term,
       count,
-      // Frequency is a sub-signal only; mergeRequiredTerms decides the level.
-      freqTier: count >= 4 ? 'high' : count >= 2 ? 'mid' : 'named',
+      tier: count >= 4 ? 'critical' : count >= 2 ? 'important' : 'supporting',
     }));
-}
-
-/**
- * Final ranking for Flow A. Server-extracted JD terms are the floor; the
- * model's own list widens it; the semantic pass from getJdBreakdown supplies
- * how essential each term is. Frequency only breaks ties within a level, so a
- * once-mentioned must-have outranks a four-times-repeated nice-to-have.
- */
-function mergeRequiredTerms(jdTerms, modelTerms = [], importance = []) {
-  const levelOf = new Map();
-  for (const row of importance || []) {
-    const term = String(row?.term || '').trim().toLowerCase();
-    const level = String(row?.level || '').trim();
-    if (term && LEVEL_RANK[level]) levelOf.set(term, level);
-  }
-
-  const out = new Map();
-  const add = (rawTerm, count) => {
-    const term = String(rawTerm || '').trim();
-    if (!term) return;
-    const key = term.toLowerCase();
-    const level = levelOf.get(key) || DEFAULT_LEVEL;
-    const prev = out.get(key);
-    if (!prev) out.set(key, { term, level, count });
-    else out.set(key, { ...prev, count: Math.max(prev.count, count) });
-  };
-
-  for (const t of jdTerms || []) add(t.term, t.count || 0);
-  for (const t of modelTerms || []) add(t, 0);
-  return [...out.values()];
 }
 
 function matchRequirement(name, text) {
@@ -809,7 +748,7 @@ exports.claudeProxy = onCall({ secrets: [ANTHROPIC_API_KEY], cors: true, timeout
     const cost = billingSettings.tailoringFree ? 0 : billingSettings.creditCostPerTailor;
     const remainingAfterSpend = cost > 0 ? await spendCreditOrThrow(uid, cost) : (await db.collection('users').doc(uid).get()).data()?.credits ?? 0;
     try {
-      const { jdText, resumeText, prompts, atsTarget, mode, intensity, aggressiveness, keywordDensity, bulletLength, lockedSections, allowRetry, experimentalFastModel, jdIntel } = payload;
+      const { jdText, resumeText, prompts, atsTarget, mode, intensity, aggressiveness, keywordDensity, bulletLength, lockedSections, allowRetry, experimentalFastModel } = payload;
       const preset = INTENSITY_PRESETS[intensity] || null;
       const effectiveAggressiveness = preset?.aggressiveness || aggressiveness;
       const effectiveKeywordDensity = preset?.keywordDensity || keywordDensity;
@@ -826,20 +765,6 @@ exports.claudeProxy = onCall({ secrets: [ANTHROPIC_API_KEY], cors: true, timeout
         .split(/\r?\n/)
         .map(l => l.replace(/^[\s\u2022\-*\u00b7\u25cf\u25aa\u2013\u2014]+/, '').trim())
         .filter(l => l.length >= 40 && /[a-z]/i.test(l));
-
-      // Optional analysis from the jdBreakdown call the client already makes.
-      // Absent on failure, in which case ranking falls back to frequency only.
-      const intel = jdIntel && typeof jdIntel === 'object' ? jdIntel : {};
-      const domainGeneric = (intel.domainGeneric || []).filter(Boolean).slice(0, 6);
-      const domainSpecific = (intel.domainSpecific || []).filter(Boolean).slice(0, 8);
-
-      const requirementCategories = [
-        ['Role / domain', [intel.roleTitle, intel.domain].filter(Boolean).join(' · ')],
-        ['Core responsibilities', (intel.responsibilities || []).slice(0, 8).join('; ')],
-        ['Technical', Object.entries(intel.techCategories || {}).map(([k, v]) => `${k}: ${(v || []).join(', ')}`).filter(s => !/:\s*$/.test(s)).join(' | ')],
-        ['Leadership / stakeholders', (intel.leadership || []).slice(0, 5).join('; ')],
-        ['Tools and qualifications', [...(intel.requiredSkills || []), ...(intel.preferredSkills || [])].slice(0, 14).join(', ')],
-      ].filter(([, v]) => v && String(v).trim());
 
       const styleLines = [
         TAILOR_MODES[mode],
@@ -866,51 +791,18 @@ exports.claudeProxy = onCall({ secrets: [ANTHROPIC_API_KEY], cors: true, timeout
       // Added back a REWRITE DEPTH section: real usage showed the model
       // defaulting to shallow keyword swaps instead of rebuilding summary,
       // categorized skills, and bullets around the JD's stack/domain.
-      // The opening is an explicit ordered method rather than a description of
-      // intent: evidence is extracted before anything is written, bullets are
-      // rebuilt from that evidence using fixed sentence architectures, and
-      // keywords are placed last against evidence that already exists. Earlier
-      // versions stated the goal but let the model start from the original
-      // sentence, which is what produced keyword-swapped originals.
+      // Reframed the opening as an explicit extract-then-rewrite method:
+      // pull the factual project synopsis out of each bullet first, then
+      // author fresh content from those facts for the JD — rather than
+      // editing the original sentence in place, which is what caused
+      // titles/bullets to stay recognizably the original with a few
+      // keywords swapped in.
       const system = [{
         type: 'text',
         cache_control: { type: 'ephemeral' },
-        text: `You are rebuilding resumes against specific job descriptions. Work through these stages in order. Stages 1-3 are internal reasoning: never print them, and never let the original sentence be your starting point for writing.
+        text: `You are rewriting resumes for specific job descriptions. Work in two explicit steps, not one: (1) EXTRACT — from each experience entry and the candidate's overall profile, pull out only the underlying project synopsis: the real scope of what was owned, what was actually built or delivered, the technologies genuinely used, the scale, and the measurable outcome — treat this as raw factual material, not as sentences to preserve. (2) REWRITE — using only that extracted material, write the resume from scratch so it's built to exactly fit this JD: its target function, domain, tech stack, and terminology throughout. Inserting a keyword into an otherwise-untouched original sentence is a failure, not a rewrite — every section must read as if it were authored for this JD from the facts above, not edited from the original text.
 
-STAGE 1 — CLASSIFY THE REQUIREMENTS
-Sort what this JD asks for into: Role/Domain, Core Responsibilities, Technical, Metrics, Leadership/Stakeholders, Tools, Qualifications. The user message may supply a pre-computed version of this; where it does, use it rather than re-deriving it.
-
-STAGE 2 — MAP EVIDENCE, BEFORE WRITING ANYTHING
-For every bullet in the ORIGINAL resume, extract the facts underneath it and nothing else:
-- what was owned
-- what was actually done
-- with whom
-- using what
-- at what scale
-- what changed as a result
-Classify each against the JD: DIRECT (explicitly demonstrated), TRANSFERABLE (different technology or domain, genuinely equivalent capability), SUPPORTING (strengthens credibility without satisfying a requirement), UNSUPPORTED (no evidence anywhere). The facts you extract here are the ONLY raw material the rewrite may use. If a fact is not in this map, it cannot appear in the output.
-
-STAGE 3 — RECONSTRUCT EACH BULLET FROM THE EVIDENCE
-Do not edit the original sentence. Select the architecture that fits what the evidence actually shows, then build a new sentence by filling it from Stage 2:
-- Delivery: Led/Drove/Delivered + initiative + scope or complexity + execution approach + measurable result
-- Stakeholder: Partnered with + stakeholders + to define or decide X + resulting in Y
-- Problem solving: Identified/Analyzed + problem or risk + action or decision + quantified outcome
-- Technical: Partnered with engineering + technical capability or system + ownership + outcome
-- Process improvement: Redesigned/Standardized/Automated + process + method or tool + before/after improvement
-- Analytics: Built/Analyzed + metrics or data + decision enabled + measurable impact
-- Risk: Identified + risk or dependency + mitigation or contingency + protected or improved outcome
-The shapes are reusable; the content never is. Every clause must trace to Stage 2. Vary which architecture you use so the section does not read as one repeated template.
-
-STAGE 4 — PLACE KEYWORDS LAST, AND ONLY WHERE EVIDENCE ALREADY FITS
-Only once bullets are rebuilt, check which required keywords are still missing and whether any can be stated honestly given what each bullet now says. A keyword goes on a bullet whose evidence supports it, or on a different bullet that does, or nowhere at all. Never force a term into a bullet whose evidence does not support it, and never add a bullet whose purpose is to host a keyword.
-
-STAGE 5 — DISTRIBUTE ACROSS EMPLOYERS BY STRONGEST EVIDENCE
-Requirement categories belong to the employers that best evidence them: one role may carry the technical and delivery terminology, another the governance and stakeholder terminology. The same keyword cluster repeating in every role is a failure — it reads as templated and tells a recruiter nothing about progression.
-
-STAGE 6 — QUANTIFY, THEN CHECK CREDIBILITY
-Surface scale and outcome figures that the original resume already supports; never invent one. Then re-read as a hiring manager: could the candidate defend every bullet for three to five minutes? Cut or rewrite anything they could not.
-
-WORDING INTENSITY — the user message carries a level (conservative / balanced / complete). It controls Stage 3's sentence-level phrasing only. It never permits skipping Stages 2, 4 or 5, and never permits editing the original sentence in place instead of rebuilding it. Conservative means a lighter touch on phrasing, not a shallower rebuild: every requirement backed by DIRECT or TRANSFERABLE evidence still has to be worked in using the JD's terms, the Skills section still has to be categorized by JD domain, and the title-framing rule below still applies.
+WORDING INTENSITY — the user message below carries a wording-change level (conservative / balanced / complete); it controls step (2)'s sentence-level rewriting only, not step (1) or the rules below. Conservative/balanced still require the full EXTRACT step, still require every requirement backed by DIRECT/TRANSFERABLE evidence to be worked in using the JD's own terms, still require the Skills section to be categorized by JD domain, and still require the title-framing rule below — they only mean lighter touch on sentence phrasing/structure, never skipping the underlying rebuild of what each bullet is actually saying. "Full reconstruction" above describes the complete level; treat conservative/balanced as genuinely lighter, not as a synonym for it.
 
 TRUTHFULNESS — the one hard constraint, overrides everything else below:
 Never invent employers, dates, that aren't in the original resume. Reframing, reprioritizing, and honest equivalence between related skills are expected and encouraged.
@@ -924,11 +816,6 @@ REWRITE DEPTH — apply this to every section, this is the most common failure m
 
 EVIDENCE CLASSIFICATION
 For each JD requirement, classify what the original resume actually supports: DIRECT (explicitly demonstrated through real experience, projects, or responsibilities), TRANSFERABLE (a different exact technology or domain, but genuinely equivalent capability — honestly close, not identical), SUPPORTING (indirect evidence that strengthens credibility without directly satisfying the requirement), UNSUPPORTED (no evidence anywhere — never claim as done; omit, or at most note as a learning interest only if the candidate's prompts ask for that framing).
-
-DOMAIN CONTEXT — two lists with different rules, never merged
-The user message may include DOMAIN WAYS OF WORKING and DOMAIN-SPECIFIC CLAIMS. Neither is a coverage requirement and neither is something to reach for.
-- DOMAIN WAYS OF WORKING are practices near-universal for this role type. You may use this phrasing as connective language on a bullet whose evidence already shows the underlying work, to name it the way this industry names it. Never write a bullet that exists only to state one, and never use one that contradicts the candidate's actual background.
-- DOMAIN-SPECIFIC CLAIMS are named frameworks, certifications, compliance regimes and regulations that this domain commonly expects but this posting did not state. Treat them as recognition aids only. You may use one ONLY where the original resume independently evidences it — if the candidate demonstrably worked under that regime or held that credential, name it correctly. If the original resume does not evidence it, it must not appear anywhere in your output, in any section, in any form. Domain typicality is not evidence. A draft that names one of these without support is rejected outright, and this outranks every coverage and score target.
 
 ROLE FIT (0-100, estimate internally): 80-100 same or closely related discipline — rewrite aggressively, reorder freely; 60-79 adjacent discipline — moderate rewrite, lead with transferable strengths; below 60 meaningfully different discipline — "conservative" here means never fabricate formal experience, titles, or credentials in the new domain that the resume doesn't support, NOT leaving the rewrite shallow: still fully rebuild the summary, skills, and every bullet, dropping implementation-level detail (specific code, architecture, low-level technical tasks) entirely and re-expressing the same underlying work through whatever genuinely transferable angle exists (e.g. software engineer to project manager: no coding or application-development framing anywhere in the output — lead every bullet with delivery ownership, cross-team coordination, timeline/scope/risk management, and stakeholder communication, built only from what the original bullet actually demonstrates). If the target role differs from the resume's actual background, shift EMPHASIS, not facts (e.g. engineer to TPM means less code-level detail and more delivery/planning/stakeholder framing, built entirely from DIRECT and TRANSFERABLE evidence already present) — this includes leading each job title with the JD's target function per the REWRITE DEPTH rule above, not just the bullet content.
 
@@ -1036,16 +923,14 @@ Include only the sections that make sense for this resume's actual content — d
           throw new Error('Tailored resume came back with an unexpected shape — please try again.');
         }
         const resume = sanitizeResumeContent(parsedResume);
-        // Graded against the union of what the JD itself repeats and what the
-        // model said it required. The server-derived half is the part the
-        // model cannot quietly shrink to flatter its own score; the semantic
-        // pass supplies how essential each term is. domainSpecific is NOT a
-        // coverage target — it is passed only so fabrications get caught.
+        // Graded against the union of what the model said the JD required and
+        // what the JD itself repeats. The server-derived half is the part the
+        // model cannot quietly shrink to flatter its own score, and it is the
+        // half that carries tier metadata.
         const audit = auditAts(
           resume,
-          mergeRequiredTerms(jdTerms, requiredKeywords, intel.keywordImportance),
-          originalBullets,
-          domainSpecific
+          [...jdTerms, ...requiredKeywords.map(term => ({ term, tier: 'important' }))],
+          originalBullets
         );
         const reconciled = reconcileAtsScore(score, audit);
         if (breakdown && audit.keywordCoverage != null) {
@@ -1064,7 +949,7 @@ Include only the sections that make sense for this resume's actual content — d
 ${promptList}
 ${styleLines.length ? '\nStyle directives for this rewrite:\n' + styleLines.map(l => `- ${l}`).join('\n') + '\n' : ''}${lockInstruction}
 Target ATS score: at least ${effectiveTarget}/100 — run the internal audit from your instructions before estimating this, don't skip it.
-${requirementCategories.length ? `\nJD REQUIREMENTS, PRE-CLASSIFIED (Stage 1 — use this instead of re-deriving it):\n${requirementCategories.map(([k, v]) => `- ${k}: ${v}`).join('\n')}\n` : ''}${domainGeneric.length ? `\nDOMAIN WAYS OF WORKING — optional phrasing, never a coverage target:\n${domainGeneric.join(', ')}\nUse this vocabulary only on bullets whose evidence already shows the work. Never add a bullet to host one.\n` : ''}${domainSpecific.length ? `\nDOMAIN-SPECIFIC CLAIMS — recognition aids, NOT permission:\n${domainSpecific.join(', ')}\nThese are conventional for this domain but absent from this posting. Use one ONLY if the ORIGINAL RESUME below independently evidences it. If it does not, the term must not appear anywhere in your output. Domain typicality is not evidence.\n` : ''}
+
 JOB DESCRIPTION:
 ${jdText}
 
@@ -1088,10 +973,8 @@ ${resumeText}`;
       // not just the model's own score — it gets the exact missing keywords
       // and hygiene violations to fix rather than a vague "try harder".
       const needsRepair = (r) => {
-        // Fabricated domain claims and un-rewritten bullets are hard gates:
-        // the draft failed the two things this pipeline exists to guarantee,
-        // whatever the score says.
-        if (r.audit.fabricatedClaims.length > 0) return true;
+        // A shallow insert is a hard gate: the draft did not do the one thing
+        // the prompt is built around, whatever the score says.
         if (r.audit.shallowInsertBullets.length > 0) return true;
         if (r.atsScore < MIN_ACCEPTABLE_ATS) return true;
         if (r.audit.keywordCoverage != null && r.audit.keywordCoverage < ATS_MIN_KEYWORD_COVERAGE) return true;
@@ -1099,12 +982,11 @@ ${resumeText}`;
         return r.audit.weakOpenerBullets.length > 0 || r.audit.pronounBullets.length > 0 || r.audit.buzzwordBullets.length > 0;
       };
 
-      // Correctness problems — fabrications, missing terms, un-rewritten
-      // bullets, hygiene — are fixable at any role distance, so they are not
-      // gated. Only a bare low score is, because reframing harder into a role
-      // the resume has no basis for is what the gate exists to prevent.
+      // Correctness problems — missing terms, un-rewritten bullets, hygiene —
+      // are fixable at any role distance, so they are not gated. Only a bare
+      // low score is, because reframing harder into a role the resume has no
+      // basis for is what the gate exists to prevent.
       const hasCorrectnessIssue = (r) =>
-        r.audit.fabricatedClaims.length > 0 ||
         r.audit.shallowInsertBullets.length > 0 ||
         r.audit.missingKeywords.length > 0 ||
         r.audit.weakOpenerBullets.length > 0 ||
@@ -1143,9 +1025,8 @@ Cut lower-value bullets to make room if needed. Do not fabricate anything not al
         tag: 'tailor_ats_audit', uid,
         modelScore: best.modelScore, finalScore: best.atsScore, roleSimilarity: best.roleSimilarity,
         keywordCoverage: best.audit.keywordCoverage, missingCount: best.audit.missingKeywords.length,
-        missingMustHave: (best.audit.missingRanked || []).filter(m => m.level === 'must-have').map(m => m.term),
+        missingCritical: (best.audit.missingByTier || []).filter(m => m.tier === 'critical').map(m => m.term),
         shallowInserts: best.audit.shallowInsertBullets.length,
-        fabricatedClaims: best.audit.fabricatedClaims,
         quantifiedBullets: best.audit.quantifiedBullets, totalBullets: best.audit.totalBullets,
         weakOpeners: best.audit.weakOpenerBullets.length, pronouns: best.audit.pronounBullets.length,
       }));
@@ -1155,9 +1036,8 @@ Cut lower-value bullets to make room if needed. Do not fabricate anything not al
         atsAudit: {
           keywordCoverage: best.audit.keywordCoverage,
           missingKeywords: best.audit.missingKeywords,
-          missingRanked: best.audit.missingRanked,
+          missingByTier: best.audit.missingByTier,
           shallowInserts: best.audit.shallowInsertBullets.length,
-          fabricatedClaims: best.audit.fabricatedClaims,
           quantifiedBullets: best.audit.quantifiedBullets,
           totalBullets: best.audit.totalBullets,
         },
@@ -1264,18 +1144,10 @@ ${resumeText}`;
   "softSkills": ["communication", "ownership"],
   "techCategories": { "Cloud": ["AWS","Terraform"], "AI": [], "Security": [], "DevOps": [] },
   "matchMatrix": [ { "term": "Kafka", "status": "strong" }, { "term": "Snowflake", "status": "missing" } ],
-  "missingKeywords": { "Programming": ["term"], "Cloud": ["term"], "Soft Skills": ["term"] },
-  "keywordImportance": [ { "term": "kubernetes", "level": "must-have" }, { "term": "collaborative", "level": "nice-to-have" } ],
-  "domain": "fintech",
-  "domainGeneric": ["stakeholder governance", "agile ceremonies"],
-  "domainSpecific": ["PCI DSS", "SOC 2"]
+  "missingKeywords": { "Programming": ["term"], "Cloud": ["term"], "Soft Skills": ["term"] }
 }
 techCategories: only include categories that are actually relevant to this JD's tech stack (skip empty/irrelevant ones — don't force all four). Add other categories beyond Cloud/AI/Security/DevOps if the JD's stack calls for it (e.g. "Frontend", "Data").
 roleTitle: the job title this posting is hiring for, exactly as the posting words it, with no seniority guessing. company: the hiring company's name. Use an empty string for either one if the posting genuinely does not state it — never guess and never substitute a placeholder.
-keywordImportance: rank the 12-25 most significant terms in this JD by how essential they are to actually getting the role, NOT by how often the posting repeats them. "must-have" = explicitly required or gating, or so central to the role's core function that its absence disqualifies — a named licence, certification, regulation or framework counts as must-have even if stated once. "differentiator" = genuinely strengthens the application without gating it. "nice-to-have" = the posting itself frames it as optional ("bonus", "a plus", "familiarity with"), or it is generic workplace language like "collaborative" or "fast-paced" no matter how often it appears. Use the term's plain lowercase form.
-domain: one short lowercase label for the industry this role sits in, e.g. fintech, healthcare, e-commerce, devtools, adtech, gaming, logistics, enterprise-saas. Use "general" if the posting does not clearly sit in one.
-domainGeneric: 3-6 process, delivery or collaboration practices that are near-universal for this ROLE TYPE at this level, and therefore low-risk to phrase into a resume that already shows the underlying work (e.g. "cross-functional stakeholder management", "agile ceremonies", "release planning"). These must be ways of working, never named products, certifications or regulations.
-domainSpecific: 3-8 named frameworks, certifications, compliance regimes, regulations or platform specialisms that are conventional for this domain but are NOT stated in this posting (e.g. "PCI DSS", "HIPAA", "SOX", "FedRAMP"). List them so they can be recognised if the candidate already has them. Never include anything already named in the posting itself.
 matchMatrix: cover the 6-10 most important JD requirements. status is "strong" (resume clearly demonstrates it), "partial" (adjacent/related experience but not exact), or "missing" (not evidenced in the resume at all). Base this strictly on what the resume actually says — do not assume.
 missingKeywords: every term from matchMatrix with status "missing", grouped into sensible categories (only include categories that have at least one term). These are meant to be shown to the candidate as things to consider genuinely gaining or emphasizing — not fabricating.
 

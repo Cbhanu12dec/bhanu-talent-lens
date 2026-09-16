@@ -465,7 +465,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
       }
 
       addLog(BUILD_STAGES.existing[2]); advanceStage();
-      await generateTailoredVersion(baseResume, customInstructions.trim() ? [customInstructions.trim()] : [], undefined, 'Initial tailor', intel);
+      await generateTailoredVersion(baseResume, customInstructions.trim() ? [customInstructions.trim()] : [], undefined, 'Initial tailor');
       advanceStage();
       setReviewTab('resume');
     } catch (err) {
@@ -477,21 +477,11 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     setLoading(false);
   }
 
-  async function generateTailoredVersion(baseR, extraPrompts = [], intensityOverride, label = 'Tailored', intelOverride) {
-    // Passed explicitly on the first run: setJdIntel has not committed yet.
-    const intel = intelOverride || jdIntel;
+  async function generateTailoredVersion(baseR, extraPrompts = [], intensityOverride, label = 'Tailored') {
     const { resume, atsScore, creditsRemaining } = await tailorResume({
       jdText: jdText.trim(), resumeText: baseR.text,
       prompts: [...(baseR.prompts || []), ...extraPrompts],
       atsTarget: baseR.atsTarget || 92, intensity: (intensityOverride || tailoringLevel).toLowerCase(), allowRetry: true,
-      jdIntel: intel ? {
-        roleTitle: intel.roleTitle, domain: intel.domain,
-        keywordImportance: intel.keywordImportance,
-        domainGeneric: intel.domainGeneric, domainSpecific: intel.domainSpecific,
-        responsibilities: intel.responsibilities, leadership: intel.leadership,
-        techCategories: intel.techCategories,
-        requiredSkills: intel.requiredSkills, preferredSkills: intel.preferredSkills,
-      } : undefined,
     });
     addLog(`Build complete — match score ${atsScore}%`);
     setBuildDone(true);
