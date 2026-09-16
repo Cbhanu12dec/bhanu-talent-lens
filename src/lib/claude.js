@@ -71,11 +71,13 @@ export async function generateCoverLetter({ jdText, resumeText, company, roleTit
 }
 
 export async function getJdBreakdown({ jdText, resumeText }) {
-  const { json } = await proxy('jdBreakdown', { jdText, resumeText });
+  const { json, degraded, degradedReason } = await proxy('jdBreakdown', { jdText, resumeText });
   if (!json || !Array.isArray(json.matchMatrix)) {
     throw new Error('JD breakdown response was malformed.');
   }
-  return json; // { requiredSkills, preferredSkills, responsibilities, leadership, softSkills, techCategories, matchMatrix }
+  // A partial result still renders; the flag is what makes that visible.
+  if (degraded) console.error('[jdBreakdown] degraded result:', degradedReason);
+  return { ...json, degraded: !!degraded, degradedReason: degradedReason || null };
 }
 
 export async function getResumeHealth({ resumeText }) {

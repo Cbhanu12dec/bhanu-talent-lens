@@ -254,6 +254,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
 
   // Build state — existing mode
   const [jdIntel, setJdIntel] = useState(null);
+  const [jdIntelError, setJdIntelError] = useState(null);
   const [diffOps, setDiffOps] = useState([]);
 
   // Build state — shared
@@ -371,6 +372,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     setBuildLog([]); setBuildDone(false); setHistory([]); setHistoryIdx(0); setBuildStageIdx(0);
     setJobDescription(null); setFindings(null); setStrategy(null);
     setJdIntel(null); setDiffOps([]);
+    setJdIntelError(null);
     setCoverLetterOpen(false); setCoverLetterText(''); setEmailOpen(false); setSendSuccess(false);
   }
 
@@ -461,7 +463,11 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
           setJobDescription({ title: intel.roleTitle || '', company: intel.company || '' });
         }
       } catch (err) {
-        console.warn('JD breakdown failed (non-fatal):', err);
+        // Tailoring still runs without this, but the JD keyword panel will be
+        // empty — which previously looked identical to "no keywords matched".
+        console.error('JD breakdown failed; keyword panel will be empty:', err);
+        setJdIntelError(err?.message || 'JD analysis unavailable');
+        addLog('JD analysis unavailable — continuing without the keyword panel.');
       }
 
       addLog(BUILD_STAGES.existing[2]); advanceStage();

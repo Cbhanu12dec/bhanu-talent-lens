@@ -6,6 +6,8 @@ import { readFileSync } from 'node:fs';
 // The helpers are sliced out of index.js and evaluated standalone so the suite
 // runs without firebase-admin credentials or a deployed function.
 const src = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+const clientSrc = readFileSync(new URL('../../src/lib/claude.js', import.meta.url), 'utf8');
+const agentSrc = readFileSync(new URL('../../src/components/AgentView.jsx', import.meta.url), 'utf8');
 const between = (a, b) => {
   const i = src.indexOf(a);
   const j = src.indexOf(b, i);
@@ -263,6 +265,141 @@ console.log('\nFix 0 — evidence-first pipeline wired into the prompt');
     /mergeRequiredTerms\(jdTerms, requiredKeywords, intel\.keywordImportance\)/.test(src)
     && !/mergeRequiredTerms\([^)]*domainSpecific/.test(src));
   check('jdIntel is plumbed into the tailor payload', /experimentalFastModel, jdIntel \} = payload/.test(src));
+}
+
+/* ---------------------------------------------------------------- Fix 8 */
+console.log('\nFix 8 — no silent failure on structured-output calls');
+{
+  check('jdBreakdown uses the safe JSON helper',
+    /callAnthropicJson\(apiKey, prompt, \{[\s\S]{0,160}logTag: 'jdBreakdown'/.test(src));
+  check('jdBreakdown no longer parses raw inline',
+    !/JSON\.parse\(stripJsonFence\(raw\)\) \};\s*\n\s*\}\s*\n\s*if \(task === 'resumeHealth'/.test(src));
+  check('jdBreakdown runs on Sonnet, not Haiku',
+    /model: MODEL_QUALITY, maxTokens: 5000, logTag: 'jdBreakdown'/.test(src));
+  check('token budget raised well above the 1600 that truncated',
+    /maxTokens: 5000, logTag: 'jdBreakdown'/.test(src));
+  check('failure throws instead of returning a silent null',
+    /if \(!data\) throw new HttpsError\('internal', `JD breakdown failed/.test(src));
+  check('degraded flag is returned to the client', /return \{ json: data, degraded, degradedReason: reason \}/.test(src));
+
+  // Truncation must be detected before parsing and retried once.
+  check('completeness check runs before JSON.parse', src.indexOf("const closed = /[}\\]]$/") < src.indexOf('JSON.parse(best.cleaned)'));
+  check('truncation is retried with a raised ceiling', /retryingWith: bigger/.test(src));
+  check('truncation is logged distinctly from malformed',
+    /tag: 'structured_json_truncated'/.test(src) && /reason === 'truncated'/.test(src));
+  check('raw body is logged on failure', /rawSample: String\(raw \|\| ''\)\.slice\(0, 1200\)/.test(src));
+  check('client logs a degraded breakdown', /\[jdBreakdown\] degraded result:/.test(clientSrc));
+  check('client no longer swallows the failure silently',
+    !/console\.warn\('JD breakdown failed \(non-fatal\)/.test(agentSrc)
+    && /keyword panel will be empty/.test(agentSrc));
+}
+
+/* -------------------------------------------------------------- Fix 0.3 */
+console.log('\nFix 0.3 — reference menu, not mandate');
+{
+  check('patterns are framed as illustrative reference',
+    /illustrative examples of sentence structures that work well, offered as reference/.test(src));
+  check('prompt forbids forcing every bullet into a shape',
+    /Do NOT force every bullet into one of these exact shapes/.test(src));
+  check('prompt forbids cycling the list as a checklist', /do not cycle through them as a checklist/.test(src));
+  check('mandate wording is gone',
+    !/Select the architecture that fits what the evidence actually shows/.test(src));
+  check('the real invariant is still stated',
+    /the original sentence must not simply be tweaked/.test(src));
+
+  // Soft variety check.
+  const same = resumeOf([
+    'Partnered with finance to define the quarterly forecast, cutting cycle time 20%.',
+    'Partnered with engineering to decide the migration sequence across 6 services.',
+    'Partnered with operations to agree the rollout plan for 12 regions.',
+  ]);
+  const a = M.auditAts(same, [], null);
+  check('3 consecutive identical openers are detected', !!a.repeatedOpeners, JSON.stringify(a.repeatedOpeners));
+  check('detected opener is reported', a.repeatedOpeners?.opener === 'partner', JSON.stringify(a.repeatedOpeners));
+  check('variety alone produces NO repair instruction', M.atsRepairInstruction(a) === '',
+    JSON.stringify(M.atsRepairInstruction(a)));
+
+  // Paired with a real violation, it rides along as a style note.
+  const withViolation = { ...a, missingKeywords: ['kafka'], missingRanked: [{ term: 'kafka', level: 'must-have', count: 3 }] };
+  const instr = M.atsRepairInstruction(withViolation);
+  check('variety note appears when a real violation exists', /Style note, not a defect/.test(instr));
+  check('variety note is never the first instruction', !instr.trim().startsWith('1. Style note'));
+
+  const varied = M.auditAts(resumeOf([
+    'Partnered with finance to define the quarterly forecast, cutting cycle time 20%.',
+    'Rebuilt the ingestion pipeline across 6 services, halving failure rate.',
+    'Identified a vendor dependency six weeks out and resequenced the rollout.',
+  ]), [], null);
+  check('varied openers are not flagged', varied.repeatedOpeners === null, JSON.stringify(varied.repeatedOpeners));
+
+  // The variety signal must not reach the repair gates.
+  check('variety is absent from needsRepair inputs',
+    !/repeatedOpeners/.test(src.slice(src.indexOf('const needsRepair'), src.indexOf('const repairIsWorthIt'))));
+}
+
+/* ------------------------------------------------- Fix 8 (behavioural) */
+console.log('\nFix 8 — truncation handling, exercised');
+{
+  // Build callAnthropicJson against a stubbed transport so the retry and
+  // degrade paths run for real rather than being asserted from source text.
+  const helperSrc = between('async function callAnthropicJson', '// Models reach for em/en dashes');
+
+  const make = (responder) => {
+    const logs = [];
+    const fn = new Function('callAnthropic', 'stripJsonFence', 'console', `
+      ${helperSrc}
+      return callAnthropicJson;`)(
+      responder,
+      t => t.replace(/```json/gi, '').replace(/```/g, '').trim(),
+      { log: (...a) => logs.push(['log', ...a]), warn: (...a) => logs.push(['warn', ...a]), error: (...a) => logs.push(['error', ...a]) }
+    );
+    return { fn, logs };
+  };
+
+  const COMPLETE = '{"matchMatrix":[{"term":"kafka","status":"strong"}],"domain":"fintech"}';
+  const TRUNCATED = '{"matchMatrix":[{"term":"kafka","status":"stro';
+
+  // 1. Truncated first, complete on retry with a bigger ceiling.
+  {
+    const seen = [];
+    const { fn, logs } = make(async (_k, _p, o) => { seen.push(o.maxTokens); return seen.length === 1 ? TRUNCATED : COMPLETE; });
+    const r = await fn('k', 'p', { maxTokens: 100, logTag: 'jdBreakdown' });
+    check('truncated response triggers a retry', seen.length === 2, JSON.stringify(seen));
+    check('retry uses a raised ceiling', seen[1] > seen[0], JSON.stringify(seen));
+    check('retry success returns parsed data', r.data?.domain === 'fintech' && r.degraded === false, JSON.stringify(r));
+    check('truncation is logged', logs.some(l => JSON.stringify(l).includes('structured_json_truncated')));
+  }
+
+  // 2. Truncated on both attempts -> degraded, with the raw body logged.
+  {
+    const { fn, logs } = make(async () => TRUNCATED);
+    const r = await fn('k', 'p', { maxTokens: 100, logTag: 'jdBreakdown' });
+    check('persistent truncation degrades rather than throwing', r.data === null && r.degraded === true);
+    check('reason distinguishes truncation from malformed', r.reason === 'truncated', r.reason);
+    const err = logs.find(l => JSON.stringify(l).includes('structured_json_failure'));
+    check('raw body is logged on failure', !!err && JSON.stringify(err).includes('kafka'));
+    // err[1] is the already-stringified payload; parse it rather than
+    // substring-matching the double-encoded outer form.
+    const payload = err ? JSON.parse(err[1]) : {};
+    check('failure log marks it as truncation', payload.looksTruncated === true, JSON.stringify(payload));
+    check('failure log records the token ceiling used', payload.maxTokens > 0, JSON.stringify(payload));
+  }
+
+  // 3. Well-formed envelope but invalid JSON -> malformed, no retry.
+  {
+    const seen = [];
+    const { fn } = make(async (_k, _p, o) => { seen.push(o.maxTokens); return '{"a":,}'; });
+    const r = await fn('k', 'p', { maxTokens: 100, logTag: 'jdBreakdown' });
+    check('malformed JSON is not retried as truncation', seen.length === 1, JSON.stringify(seen));
+    check('malformed is reported distinctly', r.degraded === true && r.reason === 'malformed', JSON.stringify(r));
+  }
+
+  // 4. Transport failure never throws out of the helper.
+  {
+    const { fn } = make(async () => { throw new Error('network down'); });
+    const r = await fn('k', 'p', { maxTokens: 100, logTag: 'jdBreakdown' });
+    check('transport errors degrade instead of throwing', r.data === null && r.reason === 'call_failed', JSON.stringify(r));
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

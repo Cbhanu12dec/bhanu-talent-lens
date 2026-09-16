@@ -207,6 +207,69 @@ function stripJsonFence(text) {
   return text.replace(/```json/gi, '').replace(/```/g, '').trim();
 }
 
+/**
+ * Structured-JSON model call that cannot fail silently.
+ *
+ * A truncated response is detected BEFORE parsing (an unterminated envelope
+ * never closes its brace) and retried once with a raised ceiling, because
+ * that failure mode is a token-budget bug rather than a formatting one and
+ * silently returning null hid exactly this for a whole release.
+ *
+ * Always resolves — never throws — so an optional enrichment call can degrade
+ * instead of taking the request down. The caller gets {data, degraded, reason}
+ * and must decide what a null `data` means.
+ */
+async function callAnthropicJson(apiKey, prompt, opts = {}) {
+  const { maxTokens = 1600, logTag = 'json', model, retryMaxTokens } = opts;
+
+  const attempt = async (tokens, isRetry) => {
+    const raw = await callAnthropic(apiKey, prompt, { ...opts, maxTokens: tokens, logTag: isRetry ? `${logTag}_retry` : logTag });
+    const cleaned = stripJsonFence(raw || '');
+    const closed = /[}\]]$/.test(cleaned);
+    return { raw, cleaned, closed, tokens };
+  };
+
+  const fail = (reason, detail, raw, tokens) => {
+    // The raw body is logged deliberately: without it a malformed response is
+    // undiagnosable after the fact. Capped so one bad call cannot flood logs.
+    console.error(JSON.stringify({
+      tag: 'structured_json_failure', logTag, reason, detail,
+      maxTokens: tokens, rawLength: (raw || '').length,
+      looksTruncated: reason === 'truncated',
+      rawSample: String(raw || '').slice(0, 1200),
+    }));
+    return { data: null, degraded: true, reason };
+  };
+
+  let first;
+  try {
+    first = await attempt(maxTokens, false);
+  } catch (e) {
+    return fail('call_failed', e.message, '', maxTokens);
+  }
+
+  let best = first;
+  if (!first.closed) {
+    const bigger = retryMaxTokens || Math.min(maxTokens * 2, 8000);
+    console.warn(JSON.stringify({
+      tag: 'structured_json_truncated', logTag, maxTokens, retryingWith: bigger, rawLength: first.raw.length,
+    }));
+    try {
+      const second = await attempt(bigger, true);
+      if (second.closed) best = second;
+    } catch (e) {
+      console.error(JSON.stringify({ tag: 'structured_json_retry_failed', logTag, detail: e.message }));
+    }
+    if (!best.closed) return fail('truncated', 'response never closed its JSON envelope', best.raw, best.tokens);
+  }
+
+  try {
+    return { data: JSON.parse(best.cleaned), degraded: false, reason: null };
+  } catch (e) {
+    return fail('malformed', e.message, best.raw, best.tokens);
+  }
+}
+
 // Models reach for em/en dashes constantly and they read as AI-written to
 // recruiters. Date ranges keep a plain hyphen; in prose the dash becomes a comma.
 const DATE_RANGE_RE = /^(?:[A-Za-z]{3,9}\.?\s*)?\d{4}\s*[—–-]\s*(?:(?:[A-Za-z]{3,9}\.?\s*)?\d{4}|Present|Current|Now)$/i;
@@ -363,6 +426,24 @@ function detectShallowInserts(bullets, originalBullets, requiredTerms, threshold
 }
 
 /**
+ * Style signal only. Three consecutive bullets opening the same way reads as
+ * template-stuffing, but it is a matter of taste rather than correctness, so
+ * this never gates a repair on its own — atsRepairInstruction appends it only
+ * when some real violation already earned a repair pass.
+ */
+function detectRepeatedOpeners(bullets, run = 3) {
+  const opener = b => stemToken(String(b || '').trim().toLowerCase().split(/[^a-z0-9]+/)[0] || '');
+  let streak = 1;
+  for (let i = 1; i < bullets.length; i++) {
+    const a = opener(bullets[i - 1]);
+    const b = opener(bullets[i]);
+    streak = a && a === b ? streak + 1 : 1;
+    if (streak >= run) return { opener: b, count: streak, from: i - streak + 2 };
+  }
+  return null;
+}
+
+/**
  * @param requiredKeywords plain strings, or {term, level, count} from
  *        mergeRequiredTerms. Flow B passes [] and is unaffected.
  * @param originalBullets  source-resume bullet lines, for rewrite verification.
@@ -424,6 +505,7 @@ function auditAts(resume, requiredKeywords = [], originalBullets = null, domainC
     buzzwordBullets: bullets.filter(b => BUZZWORD_RE.test(b)),
     aiSignalWords: bullets.flatMap(b => b.match(AI_SIGNAL_RE) || []),
     fabricatedClaims,
+    repeatedOpeners: detectRepeatedOpeners(bullets),
     shallowInsertBullets: originalBullets
       ? detectShallowInserts(bullets, originalBullets, required.map(r => r.term))
       : [],
@@ -477,6 +559,11 @@ function atsRepairInstruction(audit) {
     for (const w of audit.aiSignalWords) { const k = w.toLowerCase(); counts[k] = (counts[k] || 0) + 1; }
     const listed = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([w, n]) => `"${w}" x${n}`).join(', ');
     issues.push(`The draft uses ${audit.aiSignalWords.length} inflated/AI-sounding words, which reads as machine-written: ${listed}. Cut this to at most ${AI_SIGNAL_BUDGET} across the whole resume by replacing each with the concrete verb for what was actually done (e.g. "leveraged X to improve Y" becomes "rebuilt X, cutting Y"). Keep an instance only where it is genuinely the most accurate word.`);
+  }
+  // Style note, never a reason to repair on its own — only rides along when
+  // something above already earned the pass.
+  if (issues.length && audit.repeatedOpeners) {
+    issues.push(`Style note, not a defect: ${audit.repeatedOpeners.count} bullets in a row open with "${audit.repeatedOpeners.opener}". Vary the sentence openings while you are making the fixes above — a run of identical shapes reads as templated.`);
   }
   return issues.length ? issues.map((s, i) => `${i + 1}. ${s}`).join('\n') : '';
 }
@@ -891,7 +978,9 @@ For every bullet in the ORIGINAL resume, extract the facts underneath it and not
 Classify each against the JD: DIRECT (explicitly demonstrated), TRANSFERABLE (different technology or domain, genuinely equivalent capability), SUPPORTING (strengthens credibility without satisfying a requirement), UNSUPPORTED (no evidence anywhere). The facts you extract here are the ONLY raw material the rewrite may use. If a fact is not in this map, it cannot appear in the output.
 
 STAGE 3 — RECONSTRUCT EACH BULLET FROM THE EVIDENCE
-Do not edit the original sentence. Select the architecture that fits what the evidence actually shows, then build a new sentence by filling it from Stage 2:
+Do not edit the original sentence. Build a new one from the Stage 2 facts. That is the whole requirement: the content must trace to extracted evidence, and the original sentence must not simply be tweaked.
+
+The shapes below are illustrative examples of sentence structures that work well, offered as reference. Use them as inspiration — adapt them, blend them, or depart from them entirely as the evidence calls for. Do NOT force every bullet into one of these exact shapes, and do not cycle through them as a checklist. A resume where every bullet is visibly cast from the same small set of moulds is its own failure, just as recognisable as keyword-stuffing:
 - Delivery: Led/Drove/Delivered + initiative + scope or complexity + execution approach + measurable result
 - Stakeholder: Partnered with + stakeholders + to define or decide X + resulting in Y
 - Problem solving: Identified/Analyzed + problem or risk + action or decision + quantified outcome
@@ -899,7 +988,7 @@ Do not edit the original sentence. Select the architecture that fits what the ev
 - Process improvement: Redesigned/Standardized/Automated + process + method or tool + before/after improvement
 - Analytics: Built/Analyzed + metrics or data + decision enabled + measurable impact
 - Risk: Identified + risk or dependency + mitigation or contingency + protected or improved outcome
-The shapes are reusable; the content never is. Every clause must trace to Stage 2. Vary which architecture you use so the section does not read as one repeated template.
+Let the evidence pick the sentence, not the list. Vary openings and rhythm across a role the way a person writing about their own work naturally would.
 
 STAGE 4 — PLACE KEYWORDS LAST, AND ONLY WHERE EVIDENCE ALREADY FITS
 Only once bullets are rebuilt, check which required keywords are still missing and whether any can be stated honestly given what each bullet now says. A keyword goes on a bullet whose evidence supports it, or on a different bullet that does, or nowhere at all. Never force a term into a bullet whose evidence does not support it, and never add a bullet whose purpose is to host a keyword.
@@ -1284,8 +1373,15 @@ ${jdText}
 
 RESUME:
 ${resumeText}`;
-      const raw = await callAnthropic(apiKey, prompt, { maxTokens: 1600, logTag: 'jdBreakdown' });
-      return { json: JSON.parse(stripJsonFence(raw)) };
+      // Sonnet, not Haiku: keywordImportance is a judgement call about what
+      // gates an application, not extraction. 5000 tokens covers the worst
+      // case (25 keywordImportance objects plus the domain fields on top of
+      // the pre-existing payload) — 1600 truncated it mid-JSON in production.
+      const { data, degraded, reason } = await callAnthropicJson(apiKey, prompt, {
+        model: MODEL_QUALITY, maxTokens: 5000, logTag: 'jdBreakdown',
+      });
+      if (!data) throw new HttpsError('internal', `JD breakdown failed (${reason}).`, { degraded: true, reason });
+      return { json: data, degraded, degradedReason: reason };
     }
 
     if (task === 'resumeHealth') {
