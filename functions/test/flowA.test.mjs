@@ -252,9 +252,6 @@ console.log('\nFix 0 — evidence-first pipeline wired into the prompt');
   check('stages appear in order',
     stages.every((s, i) => i === 0 || src.indexOf(s) > src.indexOf(stages[i - 1])));
 
-  const patterns = ['Delivery:', 'Stakeholder:', 'Problem solving:', 'Technical:', 'Process improvement:', 'Analytics:', 'Risk:'];
-  for (const p of patterns) check(`architecture includes ${p.replace(':', '')}`, src.includes(`- ${p}`));
-
   check('keywords are placed after reconstruction', src.indexOf('STAGE 3') < src.indexOf('STAGE 4'));
   check('pre-classified requirement block is sent', src.includes('JD REQUIREMENTS, PRE-CLASSIFIED'));
   check('6a block is separate', src.includes('DOMAIN WAYS OF WORKING'));
@@ -298,14 +295,14 @@ console.log('\nFix 8 — no silent failure on structured-output calls');
 console.log('\nFix 0.3 — reference menu, not mandate');
 {
   check('patterns are framed as illustrative reference',
-    /illustrative examples of sentence structures that work well, offered as reference/.test(src));
+    /reference shapes organised by what the bullet is about, offered as illustration/.test(src));
   check('prompt forbids forcing every bullet into a shape',
-    /Do NOT force every bullet into one of these exact shapes/.test(src));
-  check('prompt forbids cycling the list as a checklist', /do not cycle through them as a checklist/.test(src));
+    /Do NOT force every bullet into one fixed mould/.test(src));
+  check('prompt forbids working the list as a checklist', /do NOT work through them as a checklist/.test(src));
   check('mandate wording is gone',
     !/Select the architecture that fits what the evidence actually shows/.test(src));
   check('the real invariant is still stated',
-    /the original sentence must not simply be tweaked/.test(src));
+    /The original sentence is never just edited with a keyword swapped in/.test(src));
 
   // Soft variety check.
   const same = resumeOf([
@@ -400,6 +397,87 @@ console.log('\nFix 8 — truncation handling, exercised');
     const r = await fn('k', 'p', { maxTokens: 100, logTag: 'jdBreakdown' });
     check('transport errors degrade instead of throwing', r.data === null && r.reason === 'call_failed', JSON.stringify(r));
   }
+}
+
+/* ---------------------------------------------------------------- Fix 9 */
+console.log('\nFix 9 — coverage panel reflects the final rewrite');
+{
+  const M9 = new Function(`${between('const ATS_MIN_KEYWORD_COVERAGE', 'exports.claudeProxy')}; return { recomputeMatchMatrix };`)();
+
+  // Pre-rewrite verdict from getJdBreakdown, graded on the ORIGINAL upload.
+  const stale = [
+    { term: 'DORA metrics', status: 'missing' },
+    { term: 'Kubernetes', status: 'missing' },
+    { term: 'Snowflake', status: 'missing' },
+    { term: 'incident response automation', status: 'missing' },
+  ];
+
+  const final = {
+    name: 'X',
+    sections: [
+      { heading: 'TECHNICAL SKILLS', paragraphs: ['Delivery: DORA metrics, CI/CD, Kubernetes, Terraform'] },
+      { heading: 'PROFESSIONAL EXPERIENCE', entries: [{ title: 'Lead', bullets: ['Cut change failure rate 30% by instrumenting incident response across 12 services.'] }] },
+    ],
+  };
+  const fresh = M9.recomputeMatchMatrix(final, stale);
+  const by = Object.fromEntries(fresh.map(m => [m.term, m.status]));
+
+  check('term added by the rewrite is no longer stale-missing', by['DORA metrics'] === 'strong', JSON.stringify(by));
+  check('term present ONLY in a comma-delimited skills line is matched', by.Kubernetes === 'strong', JSON.stringify(by));
+  check('term genuinely absent stays missing', by.Snowflake === 'missing', JSON.stringify(by));
+  check('partially evidenced multi-word term grades partial',
+    by['incident response automation'] === 'partial', JSON.stringify(by));
+  check('original objects are not mutated', stale[0].status === 'missing');
+  check('empty/absent matrix returns null', M9.recomputeMatchMatrix(final, []) === null
+    && M9.recomputeMatchMatrix(final, undefined) === null);
+
+  check('server returns the recomputed matrix', /matchMatrix: recomputeMatchMatrix\(best\.resume, intel\.matchMatrix\)/.test(src));
+  check('recompute happens on the post-repair resume', src.indexOf('const resultJson') > src.indexOf('for (let attempt = 0; allowRetry'));
+  check('client prefers the recomputed matrix over jdIntel',
+    /const coverageMatrix = \(mode !== 'scratch' && version\?\.matchMatrix\) \|\| jdIntel\?\.matchMatrix/.test(agentSrc));
+  check('client sends matchMatrix for re-grading', /matchMatrix: intel\.matchMatrix/.test(agentSrc));
+}
+
+/* ------------------------------------------------- Bullet-quality guards */
+console.log('\nBullet construction — chains, vagueness, one accomplishment');
+{
+  const chain = 'Established and maintained program operating rhythm including intake, prioritization, dependency management, release planning, and weekly governance reviews';
+  const story = 'Cut release slippage 35% by replacing ad-hoc intake with a scored prioritization rhythm across 6 squads.';
+  const listWithOutcome = 'Delivered migrations for billing, ledger and reporting, cutting reconciliation time 40%.';
+
+  const a = M.auditAts(resumeOf([chain]), [], null);
+  check('comma-list duty bullet is flagged as a keyword chain', a.keywordChainBullets.length === 1, JSON.stringify(a.keywordChainBullets));
+
+  const b = M.auditAts(resumeOf([story]), [], null);
+  check('reconstructed story bullet is NOT flagged', b.keywordChainBullets.length === 0, JSON.stringify(b.keywordChainBullets));
+
+  const c = M.auditAts(resumeOf([listWithOutcome]), [], null);
+  check('a list that lands on a measured outcome is not flagged',
+    c.keywordChainBullets.length === 0, JSON.stringify(c.keywordChainBullets));
+
+  const instr = M.atsRepairInstruction(a);
+  check('repair demands one primary accomplishment', /ONE primary accomplishment/.test(instr));
+  check('keyword chain is a real gate, not a style note', !/Style note/.test(instr.split('\n')[0]));
+
+  const vague = M.auditAts(resumeOf([
+    'Led enterprise initiatives across various stakeholders to deliver business value.',
+  ]), [], null);
+  check('vague abstraction phrases are flagged', vague.vaguePhraseBullets.length === 1, JSON.stringify(vague.vaguePhraseBullets));
+  check('vagueness repair names the fix', /Name the real platform, system, process or problem/.test(M.atsRepairInstruction(vague)));
+  check('concrete bullet is not flagged as vague',
+    M.auditAts(resumeOf(['Rebuilt the payments ledger reconciliation job, cutting runtime 40%.']), [], null).vaguePhraseBullets.length === 0);
+
+  // Prompt-side requirements.
+  check('Stage 2 requires WHY', /- WHY: the problem, gap, risk or pressure/.test(src));
+  check('WHY must not be fabricated', /never invent a business justification that was not stated/.test(src));
+  check('partial evidence is explicitly acceptable', /Many bullets will yield only three or four of the five/.test(src));
+  check('master rule present', /MASTER RULE: Never construct experience bullets by inserting missing JD keywords/.test(src));
+  check('one-accomplishment rule present', /ONE primary accomplishment per bullet/.test(src));
+  for (const p of ['Program leadership:', 'Technical problem:', 'CI/CD:', 'Risk:', 'Automation:', 'Adoption:', 'Metrics:', 'Incident:', 'Stakeholder conflict:', 'AI-assisted work:']) {
+    check(`purpose menu includes ${p.replace(':', '')}`, src.includes(`- ${p}`));
+  }
+  check('purpose menu is still reference, not mandate',
+    /Do NOT force every bullet into one fixed mould/.test(src));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

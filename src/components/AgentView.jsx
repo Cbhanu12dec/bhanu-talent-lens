@@ -486,7 +486,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   async function generateTailoredVersion(baseR, extraPrompts = [], intensityOverride, label = 'Tailored', intelOverride) {
     // Passed explicitly on the first run: setJdIntel has not committed yet.
     const intel = intelOverride || jdIntel;
-    const { resume, atsScore, creditsRemaining } = await tailorResume({
+    const { resume, atsScore, creditsRemaining, matchMatrix } = await tailorResume({
       jdText: jdText.trim(), resumeText: baseR.text,
       prompts: [...(baseR.prompts || []), ...extraPrompts],
       atsTarget: baseR.atsTarget || 92, intensity: (intensityOverride || tailoringLevel).toLowerCase(), allowRetry: true,
@@ -497,6 +497,8 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
         responsibilities: intel.responsibilities, leadership: intel.leadership,
         techCategories: intel.techCategories,
         requiredSkills: intel.requiredSkills, preferredSkills: intel.preferredSkills,
+        // Sent so the server can re-grade it against the finished resume.
+        matchMatrix: intel.matchMatrix,
       } : undefined,
     });
     addLog(`Build complete — match score ${atsScore}%`);
@@ -506,7 +508,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     const newLines = resumeToLines(resume);
     setDiffOps(diffLines(oldLines, newLines).filter(op => op.type !== 'same'));
 
-    pushVersion({ id: `tailor_${Date.now()}`, content: resume, matchScore: atsScore, changes: null, requirementMatches: null, flags: null }, label);
+    pushVersion({ id: `tailor_${Date.now()}`, content: resume, matchScore: atsScore, changes: null, requirementMatches: null, matchMatrix: matchMatrix || null, flags: null }, label);
     if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
     notify?.({ kind: 'good', title: 'Resume tailored', detail: `ATS match score: ${atsScore}%` });
     return resume;
@@ -706,6 +708,11 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     : Boolean(jdText.trim() && baseResumeId);
   const highlightTerms = version?.content?.highlights?.length ? version.content.highlights : (mode === 'scratch' ? (strategy?.skillPriority || []) : []);
 
+  // Fix 9: prefer the server's re-grade of the finished resume. jdIntel's
+  // matrix graded the ORIGINAL upload before the rewrite existed, so on its
+  // own it reports terms the rewrite added as still missing.
+  const coverageMatrix = (mode !== 'scratch' && version?.matchMatrix) || jdIntel?.matchMatrix || [];
+
   // Skill keywords the JD asks for that don't yet appear anywhere in the generated resume.
   const missingKeywords = React.useMemo(() => {
     if (!version?.content) return [];
@@ -713,14 +720,14 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     const pool = mode === 'scratch'
       ? [...(version.requirementMatches || []).map(m => ({ term: m.name, important: ['Critical', 'High'].includes(m.importance) })),
          ...(strategy?.skillPriority || []).map(s => ({ term: s, important: true }))]
-      : (jdIntel?.matchMatrix || []).map(m => ({ term: m.term, important: m.status === 'missing' }));
+      : coverageMatrix.map(m => ({ term: m.term, important: m.status === 'missing' }));
     const seen = new Set();
     return pool
       .filter(k => k.term && typeof k.term === 'string')
       .filter(k => { const key = k.term.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; })
       .filter(k => !text.includes(k.term.toLowerCase()))
       .slice(0, 24);
-  }, [version, strategy, jdIntel, mode]);
+  }, [version, strategy, coverageMatrix, mode]);
 
   const strongMissing = missingKeywords.filter(k => k.important);
   const niceMissing = missingKeywords.filter(k => !k.important);
@@ -728,7 +735,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   // JD Match rows, normalised across both pipelines
   const jdMatchRows = mode === 'scratch'
     ? (version?.requirementMatches || []).map(m => ({ term: m.name, level: m.evidenceStrength, meta: `${m.importance} · ${m.mentionCount}× in JD` }))
-    : (jdIntel?.matchMatrix || []).map(m => ({ term: m.term, level: m.status === 'strong' ? 'STRONG' : m.status === 'partial' ? 'WEAK' : 'MISSING', meta: '' }));
+    : coverageMatrix.map(m => ({ term: m.term, level: m.status === 'strong' ? 'STRONG' : m.status === 'partial' ? 'WEAK' : 'MISSING', meta: '' }));
 
   const selectStatus = mode === 'scratch' ? 'From scratch' : 'Tailoring';
 

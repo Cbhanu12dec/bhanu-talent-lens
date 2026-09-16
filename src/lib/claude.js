@@ -35,7 +35,7 @@ export async function tailorResume({ jdText, resumeText, gaps, prompts, atsTarge
         fabricatedClaims: json.atsAudit?.fabricatedClaims,
       });
     }
-    return { ...json, cached, creditsRemaining }; // { resume, atsScore, creditsRemaining }
+    return { ...json, cached, creditsRemaining }; // { resume, atsScore, matchMatrix, creditsRemaining }
   } catch (err) {
     if (err?.code === 'functions/resource-exhausted') {
       const outOfCreditsErr = new Error('Out of credits.');

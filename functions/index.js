@@ -312,6 +312,28 @@ const BUZZWORD_RE = /\b(synergy|synergies|team player|results[- ]driven|go[- ]ge
 const AI_SIGNAL_RE = /\b(leverag(?:e|ed|ing)|spearhead(?:ed|ing)?|orchestrat(?:e|ed|ing)|utiliz(?:e|ed|ing)|transformative|cutting[- ]edge|innovative solutions?|seamless(?:ly)?|robust|comprehensive|data[- ]driven|holistic|strategic initiatives?)\b/gi;
 const AI_SIGNAL_BUDGET = 3;
 
+// Abstractions that stand in for the thing actually built. Treated as a
+// defect rather than a style preference: when the evidence supports naming
+// the real platform or problem, a placeholder phrase is lost information.
+const VAGUE_PHRASE_RE = /\b(enterprise[- ](?:wide )?(?:initiatives?|programs?|technology programs?|solutions?)|complex (?:technology |business )?(?:programs?|initiatives?|projects?)|various (?:stakeholders?|teams?|systems?|tools?|initiatives?)|multiple (?:stakeholders?|workstreams? and teams?)|different (?:stakeholders?|teams?)|cross[- ]functional initiatives?|key initiatives?|business[- ]critical (?:initiatives?|programs?))\b/i;
+
+/**
+ * "Verb + comma-separated list of duties" reads as a checklist rather than
+ * an accomplishment, and is a JD-conversion tell even with no keyword
+ * inserted. Requires three or more list items and no figure anywhere, so a
+ * genuine list that lands on a measured outcome is left alone.
+ */
+function isKeywordChain(bullet) {
+  const b = String(bullet || '');
+  if (/\d/.test(b)) return false;
+  const segments = b.split(/,| and /i).map(s => s.trim()).filter(Boolean);
+  if (segments.length < 4) return false;
+  // Trailing items in a duty list are noun phrases, not clauses with verbs.
+  const tail = segments.slice(1);
+  const verbless = tail.filter(s => s.split(/\s+/).length <= 5 && !/\b(reduc|increas|cut|sav|deliver|improv|grew|drove|enabl|elimin|prevent)\w*\b/i.test(s));
+  return verbless.length >= Math.ceil(tail.length * 0.75);
+}
+
 function resumeToPlainText(resume) {
   const parts = [];
   for (const s of resume?.sections || []) {
@@ -506,10 +528,39 @@ function auditAts(resume, requiredKeywords = [], originalBullets = null, domainC
     aiSignalWords: bullets.flatMap(b => b.match(AI_SIGNAL_RE) || []),
     fabricatedClaims,
     repeatedOpeners: detectRepeatedOpeners(bullets),
+    keywordChainBullets: bullets.filter(isKeywordChain),
+    vaguePhraseBullets: bullets.filter(b => VAGUE_PHRASE_RE.test(b)),
     shallowInsertBullets: originalBullets
       ? detectShallowInserts(bullets, originalBullets, required.map(r => r.term))
       : [],
   };
+}
+
+/**
+ * Re-grades the JD match panel against the resume that was actually produced.
+ *
+ * The panel used to render getJdBreakdown's verdict, which grades the JD
+ * against the ORIGINAL upload and runs before the rewrite exists — so a term
+ * the rewrite added still showed as missing. This recompute is deterministic
+ * and reuses the Fix 3 matcher, so it costs nothing and cannot disagree with
+ * the coverage score. resumeToPlainText covers paragraphs as well as bullets,
+ * which is what lets a term living only in a comma-delimited skills line
+ * count as present.
+ */
+function recomputeMatchMatrix(resume, matchMatrix) {
+  if (!Array.isArray(matchMatrix) || !matchMatrix.length) return null;
+  const text = resumeToPlainText(resume);
+  const present = presenceChecker(text);
+  const stems = new Set(tokenize(text.toLowerCase()).map(stemToken));
+
+  return matchMatrix.map(m => {
+    const term = String(m?.term || '').trim();
+    if (!term) return m;
+    if (present(term)) return { ...m, status: 'strong' };
+    const words = term.toLowerCase().split(/\s+/).filter(w => w && !REQ_STOPWORDS.has(w));
+    const hit = words.filter(w => stems.has(stemToken(w))).length;
+    return { ...m, status: hit > 0 && hit < words.length ? 'partial' : 'missing' };
+  });
 }
 
 // Blends the model's estimate with what was actually measured, so the number
@@ -553,6 +604,12 @@ function atsRepairInstruction(audit) {
   }
   if (audit.buzzwordBullets.length) {
     issues.push(`Replace the generic buzzwords in these bullets with the specific thing that was actually done: ${audit.buzzwordBullets.slice(0, 5).map(b => `"${b.slice(0, 70)}"`).join('; ')}.`);
+  }
+  if ((audit.keywordChainBullets || []).length) {
+    issues.push(`These bullets are built as an action followed by a comma-separated list of duties, which reads as a checklist rather than an accomplishment: ${audit.keywordChainBullets.slice(0, 4).map(b => `"${b.slice(0, 80)}"`).join('; ')}. Rebuild each around ONE primary accomplishment as connected cause and effect: what problem made the work necessary, what was done, at what scale, and what changed. Move the remaining items to a different bullet whose evidence fits them, or drop them.`);
+  }
+  if ((audit.vaguePhraseBullets || []).length) {
+    issues.push(`These bullets hide the actual work behind a placeholder phrase: ${audit.vaguePhraseBullets.slice(0, 4).map(b => `"${b.slice(0, 80)}"`).join('; ')}. Name the real platform, system, process or problem from the original resume instead. If the source genuinely does not say which one, describe the work concretely rather than reaching for an abstraction.`);
   }
   if ((audit.aiSignalWords || []).length > AI_SIGNAL_BUDGET) {
     const counts = {};
@@ -968,26 +1025,37 @@ STAGE 1 — CLASSIFY THE REQUIREMENTS
 Sort what this JD asks for into: Role/Domain, Core Responsibilities, Technical, Metrics, Leadership/Stakeholders, Tools, Qualifications. The user message may supply a pre-computed version of this; where it does, use it rather than re-deriving it.
 
 STAGE 2 — MAP EVIDENCE, BEFORE WRITING ANYTHING
-For every bullet in the ORIGINAL resume, extract the facts underneath it and nothing else:
-- what was owned
-- what was actually done
-- with whom
-- using what
-- at what scale
-- what changed as a result
-Classify each against the JD: DIRECT (explicitly demonstrated), TRANSFERABLE (different technology or domain, genuinely equivalent capability), SUPPORTING (strengthens credibility without satisfying a requirement), UNSUPPORTED (no evidence anywhere). The facts you extract here are the ONLY raw material the rewrite may use. If a fact is not in this map, it cannot appear in the output.
+For every bullet in the ORIGINAL resume, extract these five facts and nothing else:
+- WHAT: the actual initiative, capability, platform or system involved, named specifically. Not an abstraction like "enterprise banking technology program".
+- WHY: the problem, gap, risk or pressure that made the work necessary. This is the field most resumes omit, and its absence is why bullets read as duty lists instead of accomplishments. If neither the bullet nor the rest of the resume evidences a reason, leave WHY empty — never invent a business justification that was not stated.
+- HOW: what this person personally did, as connected actions, not a comma-separated list of activities.
+- SCALE: complexity already evidenced — team or workstream counts, budget, applications, releases, users, dependencies, environments, business units, vendors, regions.
+- RESULT: what measurably changed, using only outcomes the resume states or clearly implies. Never invent a number.
+Then classify each against the JD: DIRECT (explicitly demonstrated), TRANSFERABLE (different technology or domain, genuinely equivalent capability), SUPPORTING (strengthens credibility without satisfying a requirement), UNSUPPORTED (no evidence anywhere).
+Many bullets will yield only three or four of the five. That is correct and expected — an empty field means the evidence is not there, and the answer is to leave it out, never to fill the gap with something plausible. The facts you extract here are the ONLY raw material the rewrite may use.
 
 STAGE 3 — RECONSTRUCT EACH BULLET FROM THE EVIDENCE
-Do not edit the original sentence. Build a new one from the Stage 2 facts. That is the whole requirement: the content must trace to extracted evidence, and the original sentence must not simply be tweaked.
+Do not edit the original sentence. Build a new one from the Stage 2 facts.
 
-The shapes below are illustrative examples of sentence structures that work well, offered as reference. Use them as inspiration — adapt them, blend them, or depart from them entirely as the evidence calls for. Do NOT force every bullet into one of these exact shapes, and do not cycle through them as a checklist. A resume where every bullet is visibly cast from the same small set of moulds is its own failure, just as recognisable as keyword-stuffing:
-- Delivery: Led/Drove/Delivered + initiative + scope or complexity + execution approach + measurable result
-- Stakeholder: Partnered with + stakeholders + to define or decide X + resulting in Y
-- Problem solving: Identified/Analyzed + problem or risk + action or decision + quantified outcome
-- Technical: Partnered with engineering + technical capability or system + ownership + outcome
-- Process improvement: Redesigned/Standardized/Automated + process + method or tool + before/after improvement
-- Analytics: Built/Analyzed + metrics or data + decision enabled + measurable impact
-- Risk: Identified + risk or dependency + mitigation or contingency + protected or improved outcome
+MASTER RULE: Never construct experience bullets by inserting missing JD keywords into existing sentences. First extract the candidate's underlying project, problem, ownership, actions, technical context, scale, and result. Rebuild the bullet from that evidence. Every bullet should communicate one primary accomplishment and preferably follow Problem/Objective, Action, Technical or Program Mechanism, Scale, Result. Keywords should appear only where naturally supported by the accomplishment. Avoid responsibility-only statements, keyword chains, vague phrases such as "enterprise initiatives", and unsupported metrics. The reader should be able to understand what was being built or improved, why it mattered, what the candidate personally did, and what changed as a result.
+
+The constructions below are reference shapes organised by what the bullet is about, offered as illustration. Choose, adapt or blend them as the evidence calls for. Do NOT force every bullet into one fixed mould, and do NOT work through them as a checklist:
+- Program leadership: initiative, scope, execution, outcome
+- Technical problem: problem, analysis, decision, result
+- CI/CD: existing bottleneck, engineering change, measurement, improvement
+- Risk: critical risk, potential impact, mitigation, outcome
+- Automation: manual process, automation, scale, time or toil reduction
+- Adoption: capability, adoption barrier, strategy, usage outcome
+- Metrics: question, metric, insight, decision, result
+- Incident: production issue, investigation, coordination, remediation, reliability result
+- Stakeholder conflict: competing priorities, analysis, influence, decision, delivery result
+- AI-assisted work: workflow, AI application, human validation, security controls, efficiency outcome
+
+Non-negotiable, in priority order:
+1. Content traces back to Stage 2 evidence. The original sentence is never just edited with a keyword swapped in.
+2. ONE primary accomplishment per bullet. A bullet must not be built to prove five or six JD concepts at once — CI/CD plus Agile plus DORA plus AI plus stakeholder management in one sentence is the clearest tell of a JD-converted resume. Other keywords belong on a different bullet whose evidence actually fits them.
+3. No keyword chains. "Managed roadmap, risks, dependencies and stakeholders" is a violation even with no keyword inserted, because it is a checklist rather than a story. Rebuild as connected cause and effect.
+4. No vague abstractions — "enterprise initiatives", "complex technology program", "various stakeholders" — when the evidence supports naming the actual platform, capability or problem. Vagueness is a defect, not a style choice.
 Let the evidence pick the sentence, not the list. Vary openings and rhythm across a role the way a person writing about their own work naturally would.
 
 STAGE 4 — PLACE KEYWORDS LAST, AND ONLY WHERE EVIDENCE ALREADY FITS
@@ -1185,6 +1253,7 @@ ${resumeText}`;
         if (r.atsScore < MIN_ACCEPTABLE_ATS) return true;
         if (r.audit.keywordCoverage != null && r.audit.keywordCoverage < ATS_MIN_KEYWORD_COVERAGE) return true;
         if (r.audit.totalBullets && r.audit.quantificationRatio < ATS_TARGET_QUANT_RATIO) return true;
+        if (r.audit.keywordChainBullets.length > 0 || r.audit.vaguePhraseBullets.length > 0) return true;
         return r.audit.weakOpenerBullets.length > 0 || r.audit.pronounBullets.length > 0 || r.audit.buzzwordBullets.length > 0;
       };
 
@@ -1199,6 +1268,8 @@ ${resumeText}`;
         r.audit.weakOpenerBullets.length > 0 ||
         r.audit.pronounBullets.length > 0 ||
         r.audit.buzzwordBullets.length > 0 ||
+        r.audit.keywordChainBullets.length > 0 ||
+        r.audit.vaguePhraseBullets.length > 0 ||
         (r.audit.totalBullets > 0 && r.audit.quantificationRatio < ATS_TARGET_QUANT_RATIO);
 
       const repairIsWorthIt = (r) => hasCorrectnessIssue(r) || r.roleSimilarity >= 60;
@@ -1241,12 +1312,17 @@ Cut lower-value bullets to make room if needed. Do not fabricate anything not al
 
       const resultJson = {
         resume: best.resume, atsScore: best.atsScore, metTarget: best.atsScore >= effectiveTarget, breakdown: best.breakdown,
+        // Fix 9: graded against the resume actually produced, after any repair
+        // pass, rather than getJdBreakdown's pre-rewrite verdict on the upload.
+        matchMatrix: recomputeMatchMatrix(best.resume, intel.matchMatrix),
         atsAudit: {
           keywordCoverage: best.audit.keywordCoverage,
           missingKeywords: best.audit.missingKeywords,
           missingRanked: best.audit.missingRanked,
           shallowInserts: best.audit.shallowInsertBullets.length,
           fabricatedClaims: best.audit.fabricatedClaims,
+          keywordChains: best.audit.keywordChainBullets.length,
+          vaguePhrases: best.audit.vaguePhraseBullets.length,
           quantifiedBullets: best.audit.quantifiedBullets,
           totalBullets: best.audit.totalBullets,
         },
