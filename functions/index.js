@@ -269,13 +269,118 @@ function collectExperienceBullets(resume) {
     .filter(b => typeof b === 'string' && b.trim());
 }
 
-function auditAts(resume, requiredKeywords = []) {
-  const text = resumeToPlainText(resume).toLowerCase();
-  const required = [...new Set((requiredKeywords || []).map(k => String(k || '').trim()).filter(Boolean))];
-  const missingKeywords = required.filter(k => !text.includes(k.toLowerCase()));
+const TIER_RANK = { critical: 3, important: 2, supporting: 1 };
+const escapeRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// "+", "#" and "." are part of tokens like C++, C# and .NET, so \b is wrong
+// here — these edges treat them as inside a word rather than a boundary.
+const EDGE_L = '(^|[^a-z0-9+#.])';
+const EDGE_R = '([^a-z0-9+#.]|$)';
+
+/**
+ * Presence test bound to one body of text. Word-boundary first, then a light
+ * stem fallback so "leading" satisfies "lead". Deliberately NOT a substring
+ * test: that is what let "database" silently satisfy "data".
+ */
+function presenceChecker(text) {
+  const lower = String(text || '').toLowerCase();
+  const stems = new Set(tokenize(lower).map(stemToken));
+  return function present(term) {
+    const t = String(term || '').trim().toLowerCase();
+    if (!t) return false;
+    if (new RegExp(`${EDGE_L}${escapeRe(t)}${EDGE_R}`).test(lower)) return true;
+    const parts = t.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return stems.has(stemToken(t));
+    // A multi-word requirement counts as present when every significant word
+    // in it is present, which is how Flow B grades phrases.
+    const sig = parts.filter(p => !REQ_STOPWORDS.has(p));
+    return sig.length > 0 && sig.every(p => stems.has(stemToken(p)));
+  };
+}
+
+// Words too generic to say anything about whether a bullet was rewritten.
+const OVERLAP_STOPWORDS = new Set([
+  'the','and','for','with','that','this','from','into','over','across','within','while','their','its',
+  'was','were','has','have','had','are','been','being','than','then','there','which','who','whom',
+  'per','via','use','used','using','also','both','each','more','most','new','other','such','about',
+]);
+
+function overlapTokens(s) {
+  return new Set(
+    tokenize(s)
+      .filter(t => t.length > 2 && !/^\d+$/.test(t) && !OVERLAP_STOPWORDS.has(t) && !REQ_STOPWORDS.has(t))
+      .map(stemToken)
+  );
+}
+
+/**
+ * Flags bullets that kept the original sentence and had a keyword dropped in,
+ * which the prompt calls a failure but nothing previously measured.
+ *
+ * Bullets cannot be aligned by index: the rewrite reorders, merges and cuts
+ * them, so position i out means nothing about position i in. Each rewritten
+ * bullet is therefore compared against its closest original by token
+ * containment, which is the only way to ask "was this derived from that one,
+ * essentially unchanged?".
+ */
+function detectShallowInserts(bullets, originalBullets, requiredTerms, threshold = 0.8) {
+  const origs = (originalBullets || [])
+    .map(text => ({ text, tokens: overlapTokens(text) }))
+    .filter(o => o.tokens.size >= 4); // too short to judge reliably
+  if (!origs.length || !requiredTerms.length) return [];
+
+  const flagged = [];
+  bullets.forEach((bullet, i) => {
+    const newTokens = overlapTokens(bullet);
+    if (newTokens.size < 4) return;
+
+    let best = null;
+    for (const o of origs) {
+      let shared = 0;
+      for (const t of o.tokens) if (newTokens.has(t)) shared++;
+      const ratio = shared / o.tokens.size;
+      if (!best || ratio > best.ratio) best = { ratio, source: o };
+    }
+    if (!best || best.ratio <= threshold) return;
+
+    const inNew = presenceChecker(bullet);
+    const inOld = presenceChecker(best.source.text);
+    const inserted = requiredTerms.find(t => inNew(t) && !inOld(t));
+    if (inserted) {
+      flagged.push({
+        index: i + 1,
+        bullet,
+        keyword: inserted,
+        overlap: Math.round(best.ratio * 100),
+      });
+    }
+  });
+  return flagged;
+}
+
+/**
+ * @param requiredKeywords plain strings, or {term, tier} from extractJdTerms.
+ * @param originalBullets  source-resume bullet lines, for rewrite verification.
+ */
+function auditAts(resume, requiredKeywords = [], originalBullets = null) {
+  const text = resumeToPlainText(resume);
+  const seen = new Map();
+  for (const k of requiredKeywords || []) {
+    const term = String((k && k.term) || k || '').trim();
+    if (!term) continue;
+    const tier = (k && k.tier) || 'important';
+    const prev = seen.get(term.toLowerCase());
+    // Same term from both sources keeps whichever tier ranks higher.
+    if (!prev || TIER_RANK[tier] > TIER_RANK[prev.tier]) seen.set(term.toLowerCase(), { term, tier });
+  }
+  const required = [...seen.values()];
+
+  const present = presenceChecker(text);
+  const missing = required.filter(r => !present(r.term));
   const keywordCoverage = required.length
-    ? Math.round(((required.length - missingKeywords.length) / required.length) * 100)
+    ? Math.round(((required.length - missing.length) / required.length) * 100)
     : null;
+  const byTier = (a, b) => TIER_RANK[b.tier] - TIER_RANK[a.tier] || a.term.localeCompare(b.term);
 
   const bullets = collectExperienceBullets(resume);
   const quantifiedBullets = bullets.filter(b => /\d/.test(b)).length;
@@ -284,7 +389,8 @@ function auditAts(resume, requiredKeywords = []) {
   return {
     totalRequired: required.length,
     keywordCoverage,
-    missingKeywords,
+    missingKeywords: missing.sort(byTier).map(m => m.term),
+    missingByTier: missing.sort(byTier),
     totalBullets: bullets.length,
     quantifiedBullets,
     quantificationRatio,
@@ -292,6 +398,9 @@ function auditAts(resume, requiredKeywords = []) {
     weakOpenerBullets: bullets.filter(b => WEAK_OPENER_RE.test(b.trim())),
     buzzwordBullets: bullets.filter(b => BUZZWORD_RE.test(b)),
     aiSignalWords: bullets.flatMap(b => b.match(AI_SIGNAL_RE) || []),
+    shallowInsertBullets: originalBullets
+      ? detectShallowInserts(bullets, originalBullets, required.map(r => r.term))
+      : [],
   };
 }
 
@@ -307,8 +416,19 @@ function reconcileAtsScore(modelScore, audit) {
 
 function atsRepairInstruction(audit) {
   const issues = [];
+  // Rewrite failures lead: fixing wording is pointless if the bullet is still
+  // the original sentence with a term dropped into it.
+  for (const s of (audit.shallowInsertBullets || []).slice(0, 4)) {
+    issues.push(`Bullet ${s.index} was flagged as keyword-inserted, not rewritten (unchanged: ${s.overlap}% of the original wording): "${s.bullet.slice(0, 90)}". Re-extract the underlying fact from the original bullet and rebuild the sentence structure around it — do not keep the original sentence shape and swap in "${s.keyword}".`);
+  }
   if (audit.missingKeywords.length) {
-    issues.push(`These required JD keywords do NOT appear anywhere in your draft. Work each one in verbatim wherever the candidate's real evidence supports it, or drop it only if genuinely unsupported: ${audit.missingKeywords.join(', ')}.`);
+    // Tiered when the caller supplied tiers (Flow A); plain otherwise (Flow B
+    // substitutes its own importance-sorted requirement names).
+    const tiered = audit.missingByTier || [];
+    const label = tiered.length
+      ? tiered.map(m => (m.tier === 'critical' ? `${m.term} (critical)` : m.tier === 'supporting' ? `${m.term} (supporting)` : m.term)).join(', ')
+      : audit.missingKeywords.join(', ');
+    issues.push(`These required JD keywords do NOT appear anywhere in your draft, most important first. Work each one in verbatim wherever the candidate's real evidence supports it, or drop it only if genuinely unsupported: ${label}.`);
   }
   if (audit.totalBullets && audit.quantificationRatio < ATS_TARGET_QUANT_RATIO) {
     issues.push(`Only ${audit.quantifiedBullets} of ${audit.totalBullets} experience bullets contain a concrete number. Raise this to at least half by surfacing scale, volume, team size, timeline, or percentage figures already implied by the source resume. Never invent a figure that is not supported.`);
@@ -432,6 +552,10 @@ function distinctiveJdTokens(jdText) {
  * This is a deterministic fallback so the tailor audit has something
  * objective to grade against even when the model under-reports what the JD
  * asked for. Frequency-ranked because a posting repeats what it cares about.
+ *
+ * Returns {term, count, tier} — the count is what a posting's own emphasis
+ * looks like, so it stands in for Flow B's parsed importance without needing
+ * the parse step.
  */
 function extractJdTerms(jdText, limit = 24) {
   const distinctive = distinctiveJdTokens(jdText);
@@ -451,7 +575,11 @@ function extractJdTerms(jdText, limit = 24) {
     .filter(([t, n]) => n >= 2 || distinctive.has(t))
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, limit)
-    .map(([t]) => t);
+    .map(([term, count]) => ({
+      term,
+      count,
+      tier: count >= 4 ? 'critical' : count >= 2 ? 'important' : 'supporting',
+    }));
 }
 
 function matchRequirement(name, text) {
@@ -631,6 +759,12 @@ exports.claudeProxy = onCall({ secrets: [ANTHROPIC_API_KEY], cors: true, timeout
       // Independent of anything the model reports, so the coverage audit has a
       // fixed target the model cannot influence.
       const jdTerms = extractJdTerms(jdText);
+      // Source bullets for rewrite verification. The original arrives as plain
+      // text, so bullet-ish lines are recovered by shape rather than structure.
+      const originalBullets = String(resumeText || '')
+        .split(/\r?\n/)
+        .map(l => l.replace(/^[\s\u2022\-*\u00b7\u25cf\u25aa\u2013\u2014]+/, '').trim())
+        .filter(l => l.length >= 40 && /[a-z]/i.test(l));
 
       const styleLines = [
         TAILOR_MODES[mode],
@@ -791,8 +925,13 @@ Include only the sections that make sense for this resume's actual content — d
         const resume = sanitizeResumeContent(parsedResume);
         // Graded against the union of what the model said the JD required and
         // what the JD itself repeats. The server-derived half is the part the
-        // model cannot quietly shrink to flatter its own score.
-        const audit = auditAts(resume, [...new Set([...requiredKeywords, ...jdTerms])]);
+        // model cannot quietly shrink to flatter its own score, and it is the
+        // half that carries tier metadata.
+        const audit = auditAts(
+          resume,
+          [...jdTerms, ...requiredKeywords.map(term => ({ term, tier: 'important' }))],
+          originalBullets
+        );
         const reconciled = reconcileAtsScore(score, audit);
         if (breakdown && audit.keywordCoverage != null) {
           breakdown.keywordMatch = audit.keywordCoverage;
@@ -834,18 +973,28 @@ ${resumeText}`;
       // not just the model's own score — it gets the exact missing keywords
       // and hygiene violations to fix rather than a vague "try harder".
       const needsRepair = (r) => {
+        // A shallow insert is a hard gate: the draft did not do the one thing
+        // the prompt is built around, whatever the score says.
+        if (r.audit.shallowInsertBullets.length > 0) return true;
         if (r.atsScore < MIN_ACCEPTABLE_ATS) return true;
         if (r.audit.keywordCoverage != null && r.audit.keywordCoverage < ATS_MIN_KEYWORD_COVERAGE) return true;
         if (r.audit.totalBullets && r.audit.quantificationRatio < ATS_TARGET_QUANT_RATIO) return true;
         return r.audit.weakOpenerBullets.length > 0 || r.audit.pronounBullets.length > 0 || r.audit.buzzwordBullets.length > 0;
       };
 
-      // Missing keywords are fixable at any role distance — the evidence is
-      // already in the resume, it just isn't phrased in the JD's terms. Only
-      // the score/hygiene triggers are gated on role similarity, since those
-      // really are hopeless when the role is fundamentally different.
-      const repairIsWorthIt = (r) =>
-        r.audit.missingKeywords.length > 0 || r.roleSimilarity >= 60;
+      // Correctness problems — missing terms, un-rewritten bullets, hygiene —
+      // are fixable at any role distance, so they are not gated. Only a bare
+      // low score is, because reframing harder into a role the resume has no
+      // basis for is what the gate exists to prevent.
+      const hasCorrectnessIssue = (r) =>
+        r.audit.shallowInsertBullets.length > 0 ||
+        r.audit.missingKeywords.length > 0 ||
+        r.audit.weakOpenerBullets.length > 0 ||
+        r.audit.pronounBullets.length > 0 ||
+        r.audit.buzzwordBullets.length > 0 ||
+        (r.audit.totalBullets > 0 && r.audit.quantificationRatio < ATS_TARGET_QUANT_RATIO);
+
+      const repairIsWorthIt = (r) => hasCorrectnessIssue(r) || r.roleSimilarity >= 60;
 
       // Two passes rather than one: the first repair usually clears hygiene
       // and the obvious gaps, and a second is what actually closes the long
@@ -874,8 +1023,10 @@ Cut lower-value bullets to make room if needed. Do not fabricate anything not al
 
       console.log(JSON.stringify({
         tag: 'tailor_ats_audit', uid,
-        modelScore: best.modelScore, finalScore: best.atsScore,
+        modelScore: best.modelScore, finalScore: best.atsScore, roleSimilarity: best.roleSimilarity,
         keywordCoverage: best.audit.keywordCoverage, missingCount: best.audit.missingKeywords.length,
+        missingCritical: (best.audit.missingByTier || []).filter(m => m.tier === 'critical').map(m => m.term),
+        shallowInserts: best.audit.shallowInsertBullets.length,
         quantifiedBullets: best.audit.quantifiedBullets, totalBullets: best.audit.totalBullets,
         weakOpeners: best.audit.weakOpenerBullets.length, pronouns: best.audit.pronounBullets.length,
       }));
@@ -885,6 +1036,8 @@ Cut lower-value bullets to make room if needed. Do not fabricate anything not al
         atsAudit: {
           keywordCoverage: best.audit.keywordCoverage,
           missingKeywords: best.audit.missingKeywords,
+          missingByTier: best.audit.missingByTier,
+          shallowInserts: best.audit.shallowInsertBullets.length,
           quantifiedBullets: best.audit.quantifiedBullets,
           totalBullets: best.audit.totalBullets,
         },
@@ -899,7 +1052,7 @@ Cut lower-value bullets to make room if needed. Do not fabricate anything not al
         console.error('Failed to write tailor cache (non-fatal):', e.message);
       }
 
-      return { json: resultJson, creditsRemaining: remainingAfterSpend };
+      return { json: resultJson, creditsRemaining: remainingAfterSpend, cached: false };
     } catch (err) {
       console.error('tailor failed, refunding credit:', err);
       const restored = cost > 0 ? await refundCredit(uid, cost) : remainingAfterSpend;

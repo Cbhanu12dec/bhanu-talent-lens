@@ -20,11 +20,21 @@ export async function analyzeJD({ jdText, resumeText }) {
 
 export async function tailorResume({ jdText, resumeText, gaps, prompts, atsTarget, mode, intensity, aggressiveness, keywordDensity, bulletLength, lockedSections, allowRetry }) {
   try {
-    const { json, creditsRemaining } = await proxy('tailor', { jdText, resumeText, gaps, prompts, atsTarget, mode, intensity, aggressiveness, keywordDensity, bulletLength, lockedSections, allowRetry });
+    const { json, creditsRemaining, cached } = await proxy('tailor', { jdText, resumeText, gaps, prompts, atsTarget, mode, intensity, aggressiveness, keywordDensity, bulletLength, lockedSections, allowRetry });
     if (!json || !json.resume || !json.resume.name || !Array.isArray(json.resume.sections)) {
       throw new Error('Tailoring response was missing resume data — the deployed Cloud Function may be out of date. Try "firebase deploy --only functions".');
     }
-    return { ...json, creditsRemaining }; // { resume, atsScore, creditsRemaining }
+    // Debug only: a cache hit spends no credit and re-serves the prior draft,
+    // which otherwise looks identical to "it ignored my changes".
+    if (import.meta.env.DEV) {
+      console.debug('[tailor]', cached ? 'served from cache (no credit spent)' : 'fresh build', {
+        atsScore: json.atsScore,
+        keywordCoverage: json.atsAudit?.keywordCoverage,
+        missing: json.atsAudit?.missingKeywords,
+        shallowInserts: json.atsAudit?.shallowInserts,
+      });
+    }
+    return { ...json, cached, creditsRemaining }; // { resume, atsScore, creditsRemaining }
   } catch (err) {
     if (err?.code === 'functions/resource-exhausted') {
       const outOfCreditsErr = new Error('Out of credits.');
