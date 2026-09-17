@@ -2397,6 +2397,41 @@ label.srow-title{cursor:pointer;}
   .skel{animation:none;}
 }
 
+/* ============================================================
+   RESUME DOCUMENT PREVIEW
+   Mirrors src/lib/resumeLayout.js so what is on screen matches the
+   downloaded PDF/DOCX. Sizes are the document's points scaled by 4/3 for
+   CSS pixels; black on white, no italics, no rules \u2014 the same ATS-safe
+   treatment the exported file uses.
+   ============================================================ */
+.doc,.doc-wrap > div{
+  font-family:Arial,Helvetica,'Liberation Sans',sans-serif;
+  font-size:13.3px;color:#000;background:#fff;line-height:1.28;
+  padding:0.55in 0.6in;
+}
+.doc h4{font-size:24px;font-weight:700;text-align:center;margin:0 0 4px;color:#000;letter-spacing:0;}
+.doc .contact-line{text-align:center;font-size:12.7px;color:#000;margin:0 0 12px;}
+.doc .contact-line a{color:#000;text-decoration:none;}
+.doc .sect{
+  font-size:15.3px;font-weight:700;text-transform:uppercase;color:#000;
+  letter-spacing:.02em;margin:13px 0 5px;padding:0;border:none;
+}
+.doc p{font-size:13.3px;color:#000;line-height:1.28;margin:0 0 5px;}
+.doc p strong{font-weight:700;color:#000;}
+.doc-entry{margin:0 0 8px;}
+.doc-entry-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;}
+.doc-entry-title{font-size:14px;font-weight:700;color:#000;}
+.doc-entry-date{font-size:12.7px;color:#000;font-style:normal;white-space:nowrap;}
+.doc-entry-subtitle{font-size:13.3px;font-weight:700;color:#000;font-style:normal;margin:2px 0 3px;}
+.doc-entry ul{margin:0;padding-left:0;list-style:none;}
+/* Hanging indent matched to the export: glyph at 0.20in, text at 0.38in. */
+.doc-entry li{
+  position:relative;padding-left:0.38in;margin-bottom:3.3px;
+  font-size:13.3px;line-height:1.28;color:#000;
+}
+.doc-entry li::before{content:'\\2022';position:absolute;left:0.20in;color:#000;}
+.doc-entry-footer{font-size:12.7px;color:#000;font-style:normal;margin-top:3px;}
+
 /* Settings pane header — sits inside the right column, below the page title. */
 .pane-head{margin-bottom:20px;}
 .pane-title{font-size:18px;font-weight:650;letter-spacing:-.015em;color:var(--ink);margin:0;}

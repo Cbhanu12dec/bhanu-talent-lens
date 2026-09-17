@@ -1,5 +1,8 @@
 import React from 'react';
 import { splitContact } from '../lib/contactLinks.js';
+import { LAYOUT, formatDateRange, formatHeading } from '../lib/resumeLayout.js';
+
+const SEPARATOR = LAYOUT.separator;
 
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -43,7 +46,7 @@ export default function ResumePreview({ resume, showHighlights = true }) {
         <div className="contact-line">
           {contactParts.map((p, i) => (
             <React.Fragment key={i}>
-              {i > 0 && '   •   '}
+              {i > 0 && SEPARATOR}
               {p.href
                 ? <a href={p.href} target="_blank" rel="noopener noreferrer">{p.text}</a>
                 : p.text}
@@ -53,13 +56,13 @@ export default function ResumePreview({ resume, showHighlights = true }) {
       )}
       {(resume.sections || []).map((section, i) => (
         <div key={i}>
-          <div className="sect">{section.heading}</div>
+          <div className="sect">{formatHeading(section.heading)}</div>
           {(section.paragraphs || []).map((p, j) => <ParagraphLine key={j} text={p} terms={terms} />)}
           {(section.entries || []).map((entry, k) => (
             <div className="doc-entry" key={k}>
               <div className="doc-entry-head">
                 <span className="doc-entry-title">{entry.title}</span>
-                {entry.dateRight && <span className="doc-entry-date">{entry.dateRight}</span>}
+                {entry.dateRight && <span className="doc-entry-date">{formatDateRange(entry.dateRight)}</span>}
               </div>
               {entry.subtitle && <div className="doc-entry-subtitle">{entry.subtitle}</div>}
               {entry.bullets && entry.bullets.length > 0 && (

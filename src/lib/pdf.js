@@ -1,10 +1,11 @@
 import { jsPDF } from 'jspdf';
 import { splitContact } from './contactLinks.js';
+import { LAYOUT, inToPt, leading, formatDateRange, formatHeading } from './resumeLayout.js';
 
-const NAVY = [0, 0, 0];          // headings / name — solid black per user preference, no color accents
-const TEXT = [0, 0, 0];          // body text
-const MUTED = [0, 0, 0];         // contact line, subtitles, dates
-const LINK = [17, 85, 204];      // only clickable parts get colour, so a link reads as one
+const BLACK = [0, 0, 0];
+const F = LAYOUT.font.pdf;
+const S = LAYOUT.size;
+const SP = LAYOUT.space;
 
 function sanitizeFilename(name) {
   return name.replace(/[^a-z0-9\-_]+/gi, '_').replace(/_{2,}/g, '_').replace(/^_+|_+$/g, '') || 'resume';
@@ -19,121 +20,137 @@ function splitLabelLine(line) {
 
 export function buildResumePdf(resume, title = 'Resume', opts = {}) {
   const doc = new jsPDF({ unit: 'pt', format: opts.pageSize === 'a4' ? 'a4' : 'letter' });
-  const marginX = 36; // 0.5in on all sides
-  const marginY = 36;
+
+  const mTop = inToPt(LAYOUT.margin.top);
+  const mBottom = inToPt(LAYOUT.margin.bottom);
+  const marginX = inToPt(LAYOUT.margin.left);
+  const marginR = inToPt(LAYOUT.margin.right);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const contentWidth = pageWidth - marginX * 2;
-  let y = marginY + 18; // leaves room for the name's ascender above the margin line
+  const rightEdge = pageWidth - marginR;
+  const contentWidth = rightEdge - marginX;
 
-  function ensureSpace(needed) {
-    if (y + needed > pageHeight - marginY) { doc.addPage(); y = marginY + 18; }
+  const bodyLead = leading(S.body);
+  // y tracks the TOP of the next line box, not a baseline. Advancing by a gap
+  // alone is what let the contact line collide with the first heading: the
+  // next line's ascent has to be accounted for too.
+  let y = mTop;
+
+  const ASCENT = 0.8;
+  /** Reserves a line of `size`, returns the baseline to draw on. */
+  function lineBox(size, gapBefore = 0) {
+    y += gapBefore;
+    const baseline = y + size * ASCENT;
+    y += size * LAYOUT.lineHeight;
+    return baseline;
   }
 
-  // Name
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(...NAVY);
-  doc.text(resume.name || '', pageWidth / 2, y, { align: 'center' });
-  y += 22;
+  function ensureSpace(needed) {
+    if (y + needed > pageHeight - mBottom) { doc.addPage(); y = mTop; return true; }
+    return false;
+  }
+  const set = (style, size) => { doc.setFont(F, style); doc.setFontSize(size); doc.setTextColor(...BLACK); };
 
-  // Contact line — each part is drawn individually so recognised emails,
-  // phone numbers and profile URLs can carry a real clickable link annotation.
+  /* --------------------------------------------------------------- name */
+  set('bold', S.name);
+  doc.text(resume.name || '', pageWidth / 2, lineBox(S.name), { align: 'center' });
+
+  /* ------------------------------------------------------------ contact */
   if (resume.contact) {
     const parts = splitContact(resume.contact);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...MUTED);
-    const sep = '   •   ';
+    set('normal', S.contact);
+    const baseline = lineBox(S.contact, SP.afterName);
+    const sep = LAYOUT.separator;
     const sepW = doc.getTextWidth(sep);
     const totalW = parts.reduce((w, p, i) => w + doc.getTextWidth(p.text) + (i ? sepW : 0), 0);
     let x = (pageWidth - totalW) / 2;
     parts.forEach((p, i) => {
-      if (i) { doc.setTextColor(...MUTED); doc.text(sep, x, y); x += sepW; }
+      if (i) { doc.text(sep, x, baseline); x += sepW; }
       const w = doc.getTextWidth(p.text);
-      if (p.href) {
-        doc.setTextColor(...LINK);
-        doc.text(p.text, x, y);
-        doc.setDrawColor(...LINK); doc.setLineWidth(0.6);
-        doc.line(x, y + 1.5, x + w, y + 1.5);
-        doc.link(x, y - 8, w, 11, { url: p.href });
-      } else {
-        doc.setTextColor(...MUTED);
-        doc.text(p.text, x, y);
-      }
+      doc.text(p.text, x, baseline);
+      // Clickable but not coloured or underlined: on an ATS document colour
+      // must never be the thing carrying the meaning.
+      if (p.href) doc.link(x, baseline - S.contact, w, S.contact + 3, { url: p.href });
       x += w;
     });
-    doc.setTextColor(...TEXT);
-    y += 20;
-  } else {
-    y += 6;
+    y += SP.afterContact;
   }
 
-  (resume.sections || []).forEach(section => {
-    ensureSpace(30);
-    // Heading + rule
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.setTextColor(...NAVY);
-    doc.text(section.heading || '', marginX, y);
-    y += 5;
-    doc.setDrawColor(...NAVY); doc.setLineWidth(0.75);
-    doc.line(marginX, y, pageWidth - marginX, y);
-    y += 14;
+  /* ----------------------------------------------------------- sections */
+  (resume.sections || []).forEach((section, sIdx) => {
+    // Keep a heading with at least its first line of content.
+    ensureSpace(S.heading * LAYOUT.lineHeight + SP.afterHeading + bodyLead * 2);
 
-    // Paragraphs
+    set('bold', S.heading);
+    doc.text(formatHeading(section.heading), marginX, lineBox(S.heading, sIdx > 0 ? SP.beforeHeading : 0));
+    y += SP.afterHeading;
+
+    /* paragraphs */
     (section.paragraphs || []).forEach(p => {
       const split = splitLabelLine(p);
-      doc.setFontSize(10);
       if (split) {
-        doc.setFont('helvetica', 'bold'); doc.setTextColor(...TEXT);
+        set('bold', S.skills);
         const labelWidth = doc.getTextWidth(split.label + ' ');
         const wrapped = doc.splitTextToSize(split.rest, contentWidth - labelWidth);
-        ensureSpace(wrapped.length * 13 + 4);
-        doc.text(split.label, marginX, y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(wrapped[0] || '', marginX + labelWidth, y);
-        y += 13;
-        for (let i = 1; i < wrapped.length; i++) { doc.text(wrapped[i], marginX, y); y += 13; }
+        ensureSpace(wrapped.length * bodyLead);
+        const first = lineBox(S.skills);
+        doc.text(split.label, marginX, first);
+        set('normal', S.skills);
+        doc.text(wrapped[0] || '', marginX + labelWidth, first);
+        for (let i = 1; i < wrapped.length; i++) doc.text(wrapped[i], marginX, lineBox(S.skills));
       } else {
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(...TEXT);
+        set('normal', S.body);
         const wrapped = doc.splitTextToSize(p, contentWidth);
-        ensureSpace(wrapped.length * 13 + 4);
-        wrapped.forEach(line => { doc.text(line, marginX, y); y += 13; });
+        ensureSpace(wrapped.length * bodyLead);
+        wrapped.forEach(line => doc.text(line, marginX, lineBox(S.body)));
       }
-      y += 4;
+      y += SP.afterParagraph;
     });
 
-    // Entries
-    (section.entries || []).forEach(entry => {
-      ensureSpace(30);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...TEXT);
-      doc.text(entry.title || '', marginX, y);
+    /* entries */
+    (section.entries || []).forEach((entry, eIdx) => {
+      // A job header stranded at the foot of a page with no bullets under it
+      // is the most common break defect, so the header reserves two bullets.
+      ensureSpace(S.jobTitle * LAYOUT.lineHeight + S.company * LAYOUT.lineHeight + bodyLead * 2);
+
+      set('bold', S.jobTitle);
+      const titleBaseline = lineBox(S.jobTitle, eIdx > 0 ? SP.afterJob : 0);
+      doc.text(entry.title || '', marginX, titleBaseline);
       if (entry.dateRight) {
-        doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(...MUTED);
-        doc.text(entry.dateRight, pageWidth - marginX, y, { align: 'right' });
+        set('normal', S.date);
+        doc.text(formatDateRange(entry.dateRight), rightEdge, titleBaseline, { align: 'right' });
       }
-      y += 13;
-      if (entry.subtitle) {
-        doc.setFont('helvetica', 'italic'); doc.setFontSize(10); doc.setTextColor(...MUTED);
-        doc.text(entry.subtitle, marginX, y);
-        y += 13;
-      }
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...TEXT);
-      // Bullets sit inset from the role heading, with wrapped lines aligned
-      // under the first line rather than back at the margin.
-      const bulletX = marginX + 12;
-      const bulletTextX = marginX + 24;
-      (entry.bullets || []).forEach(b => {
-        const wrapped = doc.splitTextToSize(b, contentWidth - 24);
-        ensureSpace(wrapped.length * 13 + 2);
-        doc.text('\u2022', bulletX, y);
-        wrapped.forEach(line => { doc.text(line, bulletTextX, y); y += 13; });
-      });
-      if (entry.footer) {
-        doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(...MUTED);
-        const wrapped = doc.splitTextToSize(entry.footer, contentWidth);
-        ensureSpace(wrapped.length * 12 + 2);
-        wrapped.forEach(line => { doc.text(line, marginX, y); y += 12; });
-      }
-      y += 8;
-    });
+      y += SP.afterTitleLine;
 
-    y += 6;
+      if (entry.subtitle) {
+        set('bold', S.company);
+        doc.text(entry.subtitle, marginX, lineBox(S.company));
+        y += SP.afterTitleLine;
+      }
+
+      const bulletX = marginX + inToPt(LAYOUT.bullet.glyphIndent);
+      const textX = marginX + inToPt(LAYOUT.bullet.textIndent);
+      const bulletWidth = rightEdge - textX;
+      (entry.bullets || []).forEach(b => {
+        set('normal', S.body);
+        const wrapped = doc.splitTextToSize(b, bulletWidth);
+        if (ensureSpace(wrapped.length * bodyLead)) set('normal', S.body);
+        // Wrapped lines start at textX, giving a true hanging indent.
+        wrapped.forEach((line, i) => {
+          const baseline = lineBox(S.body);
+          if (i === 0) doc.text(LAYOUT.bullet.char, bulletX, baseline);
+          doc.text(line, textX, baseline);
+        });
+        y += SP.afterBullet;
+      });
+
+      if (entry.footer) {
+        set('normal', S.footer);
+        const wrapped = doc.splitTextToSize(entry.footer, contentWidth);
+        ensureSpace(wrapped.length * leading(S.footer));
+        wrapped.forEach(line => doc.text(line, marginX, lineBox(S.footer)));
+      }
+    });
   });
 
   const blob = doc.output('blob');
