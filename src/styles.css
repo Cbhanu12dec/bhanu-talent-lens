@@ -2429,7 +2429,7 @@ label.srow-title{cursor:pointer;}
   position:relative;padding-left:0.38in;margin-bottom:3.3px;
   font-size:13.3px;line-height:1.28;color:#000;
 }
-.doc-entry li::before{content:'\\2022';position:absolute;left:0.20in;color:#000;}
+.doc-entry li::before{content:'•';position:absolute;left:0.20in;color:#000;}
 .doc-entry-footer{font-size:12.7px;color:#000;font-style:normal;margin-top:3px;}
 
 /* Settings pane header — sits inside the right column, below the page title. */
