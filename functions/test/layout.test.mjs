@@ -83,6 +83,7 @@ console.log('\nPDF layout');
     str: i.str,
     x: Math.round(i.transform[4] * 100) / 100,
     y: Math.round(i.transform[5] * 100) / 100,
+    width: Math.round((i.width || 0) * 100) / 100,
     size: Math.round(Math.hypot(i.transform[0], i.transform[1]) * 10) / 10,
     font: i.fontName,
   }));
@@ -162,6 +163,29 @@ console.log('\nPDF layout');
   const a4doc = await pdfjs.getDocument({ data: new Uint8Array(await a4.blob.arrayBuffer()) }).promise;
   const a4vp = (await a4doc.getPage(1)).getViewport({ scale: 1 });
   check('A4 honoured when requested', near(a4vp.width, 595, 2) && near(a4vp.height, 842, 2), `${a4vp.width}x${a4vp.height}`);
+
+  // Contact details must stay clickable even though they render black.
+  const annots = (await page.getAnnotations()).filter(a => a.subtype === 'Link');
+  const urls = annots.map(a => a.url || a.unsafeUrl).filter(Boolean);
+  check('PDF carries clickable link annotations', annots.length >= 3, `${annots.length} links`);
+  check('email is a mailto link', urls.some(u => u.startsWith('mailto:')), urls.join(' '));
+  check('phone is a tel link', urls.some(u => u.startsWith('tel:')), urls.join(' '));
+  check('profile URL is an https link', urls.some(u => u.startsWith('https://')), urls.join(' '));
+  // pdf.js merges the contact parts into one text item, so the link can only
+  // be checked against the line's span and baseline, not a per-part x.
+  const contactLine = find('Dallas, TX');
+  const emailLink = annots.find(a => (a.url || a.unsafeUrl || '').startsWith('mailto:'));
+  check('link sits horizontally within the contact line',
+    contactLine && emailLink
+    && emailLink.rect[0] >= contactLine.x - 1
+    && emailLink.rect[2] <= contactLine.x + contactLine.width + 1,
+    `${emailLink?.rect?.[0]}–${emailLink?.rect?.[2]} vs ${contactLine?.x}–${Math.round((contactLine?.x || 0) + (contactLine?.width || 0))}`);
+  check('link sits on the contact baseline',
+    contactLine && emailLink && Math.abs(emailLink.rect[1] - contactLine.y) < 4,
+    `${emailLink?.rect?.[1]} vs ${contactLine?.y}`);
+  check('every link rectangle is inside the page margins',
+    annots.every(a => a.rect[0] >= marginL - 1 && a.rect[2] <= rightEdge + 1),
+    annots.map(a => `${Math.round(a.rect[0])}-${Math.round(a.rect[2])}`).join(' '));
 }
 
 /* ------------------------------------------------------------------- DOCX */
@@ -201,6 +225,15 @@ console.log('\nDOCX layout');
   const a4 = await buildResumeDocx(RESUME, 'Test', { pageSize: 'a4' });
   const a4xml = await (await JSZip.loadAsync(Buffer.from(await a4.blob.arrayBuffer()))).file('word/document.xml').async('string');
   check('A4 honoured when requested', /w:w="11906"/.test(a4xml));
+
+  // Word hyperlinks live in the relationship file, not the document body.
+  const rels = await zip.file('word/_rels/document.xml.rels').async('string');
+  const targets = [...rels.matchAll(/Target="([^"]+)"[^>]*TargetMode="External"/g)].map(m => m[1]);
+  check('DOCX carries external hyperlinks', targets.length >= 3, targets.join(' '));
+  check('email is a mailto link', targets.some(t => t.startsWith('mailto:')), targets.join(' '));
+  check('phone is a tel link', targets.some(t => t.startsWith('tel:')), targets.join(' '));
+  check('profile URL is an https link', targets.some(t => t.startsWith('https://')), targets.join(' '));
+  check('hyperlink runs are referenced in the body', /<w:hyperlink /.test(xml));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

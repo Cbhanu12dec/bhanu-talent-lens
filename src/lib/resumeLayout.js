@@ -37,11 +37,13 @@ export const LAYOUT = {
   space: {          // points
     afterName: 3.5,
     afterContact: 9,
-    beforeHeading: 10,
-    afterHeading: 4,
+    // Top of the approved 9-11pt range: section breaks are the strongest
+    // separation on the page and carry the scanning hierarchy.
+    beforeHeading: 11,
+    afterHeading: 5,
     afterParagraph: 4,
     afterBullet: 2.5,
-    afterJob: 6,
+    afterJob: 7,
     afterTitleLine: 1.5,
   },
   bullet: {
