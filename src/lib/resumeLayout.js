@@ -14,7 +14,9 @@ export const PAGE = {
 };
 
 export const LAYOUT = {
-  margin: { top: 0.55, bottom: 0.55, left: 0.60, right: 0.60 }, // inches
+  // Uniform 0.75in reads as a deliberate page edge on screen and in print, and
+  // stays well clear of the 0.5in floor where ATS parsers start clipping.
+  margin: { top: 0.75, bottom: 0.75, left: 0.75, right: 0.75 }, // inches
   font: {
     // jsPDF ships Helvetica, not Arial. They are metrically compatible and
     // Helvetica is the approved fallback, so the two renderers stay aligned.

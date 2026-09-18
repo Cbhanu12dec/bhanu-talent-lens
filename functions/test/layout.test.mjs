@@ -4,6 +4,7 @@
 // Renders real PDF and DOCX files and measures them, rather than asserting on
 // the source — a token can be correct and still not reach the page.
 import JSZip from 'jszip';
+import { readFileSync } from 'node:fs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { buildResumePdf } from '../../src/lib/pdf.js';
 import { buildResumeDocx } from '../../src/lib/docx.js';
@@ -201,9 +202,10 @@ console.log('\nDOCX layout');
   check('page size is US Letter', /w:w="12240"[^/]*w:h="15840"/.test(xml));
 
   const m = xml.match(/<w:pgMar[^/]*\/>/)?.[0] || '';
-  check('top margin is 0.55in', m.includes(`w:top="${inToTwips(0.55)}"`), m);
-  check('left margin is 0.60in', m.includes(`w:left="${inToTwips(0.60)}"`), m);
-  check('right margin is 0.60in', m.includes(`w:right="${inToTwips(0.60)}"`), m);
+  check('top margin matches the layout system', m.includes(`w:top="${inToTwips(LAYOUT.margin.top)}"`), m);
+  check('bottom margin matches the layout system', m.includes(`w:bottom="${inToTwips(LAYOUT.margin.bottom)}"`), m);
+  check('left margin matches the layout system', m.includes(`w:left="${inToTwips(LAYOUT.margin.left)}"`), m);
+  check('right margin matches the layout system', m.includes(`w:right="${inToTwips(LAYOUT.margin.right)}"`), m);
 
   check('name is 18pt', new RegExp(`<w:sz w:val="${ptToHalfPt(LAYOUT.size.name)}"`).test(xml));
   check('heading is 11.5pt', new RegExp(`<w:sz w:val="${ptToHalfPt(LAYOUT.size.heading)}"`).test(xml));
@@ -234,6 +236,26 @@ console.log('\nDOCX layout');
   check('phone is a tel link', targets.some(t => t.startsWith('tel:')), targets.join(' '));
   check('profile URL is an https link', targets.some(t => t.startsWith('https://')), targets.join(' '));
   check('hyperlink runs are referenced in the body', /<w:hyperlink /.test(xml));
+}
+
+/* ---------------------------------------------- on-screen preview parity */
+{
+  console.log('\nPreview margins');
+  const css = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+  const rule = css.slice(css.indexOf('.doc,.doc-wrap > div{'));
+  const y = rule.match(/--doc-margin-y:\s*([\d.]+)in/)?.[1];
+  const x = rule.match(/--doc-margin-x:\s*([\d.]+)in/)?.[1];
+
+  check('preview declares its page margins', Boolean(y && x), `y=${y} x=${x}`);
+  check('preview vertical margin matches the export',
+    Number(y) === LAYOUT.margin.top && LAYOUT.margin.top === LAYOUT.margin.bottom, `${y} vs ${LAYOUT.margin.top}`);
+  check('preview horizontal margin matches the export',
+    Number(x) === LAYOUT.margin.left && LAYOUT.margin.left === LAYOUT.margin.right, `${x} vs ${LAYOUT.margin.left}`);
+  check('preview padding is driven by those variables',
+    /padding:var\(--doc-margin-y\) var\(--doc-margin-x\)/.test(rule.replace(/\s+/g, '')) ||
+    /padding:\s*var\(--doc-margin-y\)\s+var\(--doc-margin-x\)/.test(rule));
+  check('margins stay above the ATS clipping floor',
+    Math.min(...Object.values(LAYOUT.margin)) >= 0.5, JSON.stringify(LAYOUT.margin));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

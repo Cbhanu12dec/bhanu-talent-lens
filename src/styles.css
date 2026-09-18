@@ -2404,10 +2404,14 @@ label.srow-title{cursor:pointer;}
    CSS pixels; black on white, no italics, no rules \u2014 the same ATS-safe
    treatment the exported file uses.
    ============================================================ */
+/* Must equal LAYOUT.margin in resumeLayout.js. layout.test.mjs fails if they
+   drift, since CSS cannot import the constant. */
 .doc,.doc-wrap > div{
+  --doc-margin-y:0.75in;
+  --doc-margin-x:0.75in;
   font-family:Arial,Helvetica,'Liberation Sans',sans-serif;
   font-size:13.3px;color:#000;background:#fff;line-height:1.28;
-  padding:0.55in 0.6in;
+  padding:var(--doc-margin-y) var(--doc-margin-x);
 }
 .doc h4{font-size:24px;font-weight:700;text-align:center;margin:0 0 4px;color:#000;letter-spacing:0;}
 .doc .contact-line{text-align:center;font-size:12.7px;color:#000;margin:0 0 12px;}
