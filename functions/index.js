@@ -1386,6 +1386,70 @@ ${resumeText}`;
       return { json: JSON.parse(stripJsonFence(raw)) };
     }
 
+    if (task === 'blockFix') {
+      const { blockText, instruction, jobDescription, tailoringLevel, context } = payload;
+      if (!String(blockText || '').trim()) throw new HttpsError('invalid-argument', 'No block text supplied.');
+
+      const level = ['conservative', 'balanced', 'aggressive'].includes(tailoringLevel) ? tailoringLevel : 'balanced';
+      // Only the sibling bullets of this one entry are supplied. The whole
+      // resume is deliberately withheld: unrelated context is what tempts the
+      // model to borrow a fact from a different job and attach it here.
+      const siblings = (context?.siblingBullets || []).filter(Boolean).slice(0, 8);
+      const system = [{
+        type: 'text',
+        cache_control: { type: 'ephemeral' },
+        text: `You rewrite a single resume block. You are not writing a new resume section and you are not seeing the whole document — only this one block, the job description, and the candidate's career profile facts.
+
+Hard rules:
+1. Never invent an employer, job title, date range, degree, certification, or number that is not present in the supplied facts. If the requested change requires a fact you don't have (for example "add a metric" but no metric exists for this achievement), insert a bracketed placeholder like [ADD %] or [ADD TEAM SIZE] instead of a fabricated value, and add a warning explaining what is missing.
+2. Preserve the block's core claim. You may tighten, reorder, or emphasise different real facts to match the job description, but you may not change what the candidate actually did.
+3. Match the requested tailoring level:
+   - conservative: minimal wording changes, no new claims
+   - balanced: reasonable rewording and reordering for fit
+   - aggressive: may restructure the sentence significantly, but rules 1 and 2 still apply without exception
+4. When the instruction asks to match JD keywords, only pull terms that are semantically true of the candidate's real experience — do not insert a keyword from the job description if it misrepresents what they did.
+5. Output plain text only — no markdown, no bullet character, matching the formatting convention of the input block. Never use em dashes or en dashes; use commas or separate sentences.
+
+Return JSON only, matching this shape:
+{ "rewrittenText": string, "keywordsAdded": string[], "warnings": string[] }`
+      }];
+
+      const user = `TAILORING LEVEL: ${level}
+
+INSTRUCTION: ${String(instruction || 'Improve this block for the target role.').slice(0, 400)}
+
+BLOCK TO REWRITE (this exact text, already reflecting any earlier accepted edits):
+${blockText}
+${siblings.length ? `\nOTHER BULLETS UNDER THE SAME ROLE (context only — do not rewrite these, and do not duplicate their content):\n${siblings.map(s => `- ${s}`).join('\n')}` : ''}
+${context?.entryTitle ? `\nTHIS BLOCK BELONGS TO: ${context.entryTitle}${context.entrySubtitle ? `, ${context.entrySubtitle}` : ''}` : ''}
+${context?.section ? `SECTION: ${context.section}` : ''}
+
+JOB DESCRIPTION:
+${String(jobDescription || '').slice(0, 6000)}`;
+
+      const { data, degraded, reason } = await callAnthropicJson(apiKey, user, {
+        model: MODEL_QUALITY, maxTokens: 1200, system, logTag: 'blockFix',
+      });
+      if (!data) throw new HttpsError('internal', `Block rewrite failed (${reason}).`, { degraded, reason });
+
+      const rewrittenText = stripFancyDashes(String(data.rewrittenText || '').trim());
+      if (!rewrittenText) throw new HttpsError('internal', 'Block rewrite came back empty.');
+
+      const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean).map(String) : [];
+      // A placeholder must always be announced, even when the model forgets to
+      // warn about it — the UI gates acceptance on this.
+      if (/\[ADD[^\]]*\]/i.test(rewrittenText) && !warnings.length) {
+        warnings.push('This rewrite contains a placeholder. Fill in the real value before accepting.');
+      }
+      return {
+        json: {
+          rewrittenText,
+          keywordsAdded: Array.isArray(data.keywordsAdded) ? data.keywordsAdded.filter(Boolean).map(String).slice(0, 12) : [],
+          warnings,
+        },
+      };
+    }
+
     if (task === 'thankYouEmail') {
       const { company, contactName, senderName, roleTitle, notes } = payload;
       const prompt = `Write a short post-interview thank-you email. Return ONLY raw JSON, no markdown fences: {"subject":"...", "body":"..."}

@@ -80,6 +80,19 @@ export async function getJdBreakdown({ jdText, resumeText }) {
   return { ...json, degraded: !!degraded, degradedReason: degradedReason || null };
 }
 
+/** Rewrites one block. Never sends the whole resume — only this block's text. */
+export async function fixBlock({ blockText, instruction, jobDescription, tailoringLevel, context }) {
+  const { json } = await proxy('blockFix', { blockText, instruction, jobDescription, tailoringLevel, context });
+  if (!json || typeof json.rewrittenText !== 'string') {
+    throw new Error('Block rewrite response was malformed.');
+  }
+  return {
+    rewrittenText: json.rewrittenText,
+    keywordsAdded: json.keywordsAdded || [],
+    warnings: json.warnings || [],
+  };
+}
+
 export async function getResumeHealth({ resumeText }) {
   const { json } = await proxy('resumeHealth', { resumeText });
   return json; // { buzzwords, passiveVoiceBullets, repeatedVerbs, weakBullets, longBullets, grammarIssues }

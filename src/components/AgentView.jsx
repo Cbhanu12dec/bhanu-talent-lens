@@ -5,12 +5,14 @@ import {
   listCustomDomains, createCustomDomain
 } from '../lib/firestore.js';
 import {
-  parseJobDescription, analyzeAgentRun, buildAgentResume, tailorResume, getJdBreakdown,
+  parseJobDescription, analyzeAgentRun, buildAgentResume, tailorResume, getJdBreakdown, fixBlock,
   ocrImages, generateCoverLetter, draftEmail, listPublicSubDomains
 } from '../lib/claude.js';
 import { buildResumePdf, downloadBlob } from '../lib/pdf.js';
 import { buildResumeDocx } from '../lib/docx.js';
 import { exportOptions } from '../lib/exportPrefs.js';
+import { setBlockText, findBlock, applyPinnedBlocks } from '../lib/resumeBlocks.js';
+import BlockEditor from './BlockEditor.jsx';
 import { diffLines, resumeToLines } from '../lib/diff.js';
 import { flattenResume } from '../lib/resumeFormat.js';
 import { createGmailDraft } from '../lib/gmail.js';
@@ -283,6 +285,70 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
   const [history, setHistory] = useState([]);
   const [historyIdx, setHistoryIdx] = useState(0);
   const version = history[historyIdx]?.version || null;
+
+  /* ---------------------------- block-level editing ---------------------- */
+  // One block editable at a time: selectedBlockId plus a mode, in one slice,
+  // so two blocks can never be mid-edit simultaneously.
+  const [blockEdit, setBlockEdit] = useState({ id: null, meta: null, mode: 'menu' });
+  const isEditingBlock = Boolean(blockEdit.id);
+
+  const pinnedBlocks = version?.pinnedBlocks || [];
+  const pinnedIds = React.useMemo(() => new Set(pinnedBlocks.map(p => p.id)), [pinnedBlocks]);
+
+  function selectBlock(id, meta) {
+    setBlockEdit(id ? { id, meta, mode: 'menu' } : { id: null, meta: null, mode: 'menu' });
+  }
+
+  // Every accepted edit rewrites the version's content and appends to an
+  // append-only log, so v1 and v3 stay diffable and a single block can be
+  // reverted later without replaying the whole document.
+  function commitBlock(text, source, instruction) {
+    const meta = blockEdit.meta;
+    if (!meta || !version?.content) return;
+    const before = meta.text;
+    if (!text || text === before) { setBlockEdit({ id: null, meta: null, mode: 'menu' }); return; }
+
+    patchCurrentVersion(v => {
+      const content = setBlockText(v.content, meta.id, text);
+      const pins = (v.pinnedBlocks || []).filter(p => p.id !== meta.id);
+      pins.push({
+        id: meta.id, kind: meta.kind, section: meta.section,
+        entryTitle: meta.entryTitle || '', path: meta.path,
+        text, pinnedSource: source, pinnedAt: new Date().toISOString(),
+      });
+      const log = [...(v.editLog || []), {
+        id: `e_${Date.now()}`, blockId: meta.id, source,
+        instruction: instruction || null, before, after: text,
+        accepted: true, createdAt: new Date().toISOString(),
+      }];
+      return { content, pinnedBlocks: pins, editLog: log };
+    });
+    setBlockEdit({ id: null, meta: null, mode: 'menu' });
+    notify?.({ kind: 'good', title: source === 'ai' ? 'AI edit applied' : 'Block updated', detail: 'Pinned — it will survive the next regeneration.' });
+  }
+
+  function unpinBlock(id) {
+    patchCurrentVersion(v => ({ pinnedBlocks: (v.pinnedBlocks || []).filter(p => p.id !== id) }));
+  }
+
+  async function askAiForBlock(instruction) {
+    const meta = blockEdit.meta;
+    // The latest committed text is sent, never the original, so a second ask
+    // builds on the first iteration's result rather than undoing it.
+    const current = findBlock(version.content, meta.id)?.text || meta.text;
+    const res = await fixBlock({
+      blockText: current,
+      instruction,
+      jobDescription: jdText.trim(),
+      tailoringLevel: (tailoringLevel || 'balanced').toLowerCase(),
+      context: {
+        section: meta.section, entryTitle: meta.entryTitle, entrySubtitle: meta.entrySubtitle,
+        siblingBullets: meta.siblingBullets || [],
+      },
+    });
+    return res;
+  }
+
   const [reviewTab, setReviewTab] = useState('resume');
   const [showHighlights, setShowHighlights] = useState(true);
   const [rebuildSections, setRebuildSections] = useState({ summary: true, experience: true });
@@ -508,7 +574,23 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
     const newLines = resumeToLines(resume);
     setDiffOps(diffLines(oldLines, newLines).filter(op => op.type !== 'same'));
 
-    pushVersion({ id: `tailor_${Date.now()}`, content: resume, matchScore: atsScore, changes: null, requirementMatches: null, matchMatrix: matchMatrix || null, flags: null }, label);
+    // Pinned blocks are carried across verbatim: a regeneration must never
+    // re-word something the user explicitly accepted.
+    const carried = history[historyIdx]?.version?.pinnedBlocks || [];
+    const { resume: merged, applied, missed } = applyPinnedBlocks(resume, carried);
+    if (applied.length) {
+      notify?.({
+        kind: 'good', title: `${applied.length} pinned block${applied.length === 1 ? '' : 's'} kept`,
+        detail: missed.length ? `${missed.length} could not be placed in the new structure.` : 'Everything else was regenerated.',
+      });
+    }
+
+    pushVersion({
+      id: `tailor_${Date.now()}`, content: merged, matchScore: atsScore,
+      changes: null, requirementMatches: null, matchMatrix: matchMatrix || null, flags: null,
+      pinnedBlocks: applied.map(a => ({ ...a, id: a.appliedTo })),
+      editLog: history[historyIdx]?.version?.editLog || [],
+    }, label);
     if (creditsRemaining !== undefined) onCreditsChange?.(creditsRemaining);
     notify?.({ kind: 'good', title: 'Resume tailored', detail: `ATS match score: ${atsScore}%` });
     return resume;
@@ -1002,7 +1084,7 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
             )}
 
             <button className="btn btn-primary btn-full"
-              disabled={loading || regenerating || !canAdvance}
+              disabled={loading || regenerating || isEditingBlock || !canAdvance}
               onClick={version ? handleAggressiveRebuild : (mode === 'scratch' ? runScratchPipeline : runTailorPipeline)}>
               {loading || regenerating ? 'Generating…' : version ? (iterateOnDraft ? `↻ Apply to v${historyIdx + 1}` : '↻ Rebuild fresh') : 'Generate Resume →'}
             </button>
@@ -1151,7 +1233,28 @@ export default function AgentView({ uid, state, setView, notify, credits, onCred
 
                 <div className="result-body">
                   {reviewTab === 'resume' && (
-                    <div className="doc"><ResumePreview resume={{ ...version.content, highlights: highlightTerms }} showHighlights={showHighlights} /></div>
+                    <div className="doc">
+                      <ResumePreview
+                        resume={{ ...version.content, highlights: highlightTerms }}
+                        showHighlights={showHighlights}
+                        pinnedIds={pinnedIds}
+                        edit={{
+                          selectedId: blockEdit.id,
+                          onSelect: selectBlock,
+                          renderEditor: (id, meta) => (
+                            <BlockEditor
+                              block={{ ...meta, pinned: pinnedIds.has(id) }}
+                              mode={blockEdit.mode}
+                              onMode={m => setBlockEdit(s => ({ ...s, mode: m }))}
+                              onCancel={() => selectBlock(null)}
+                              onCommit={commitBlock}
+                              onAskAi={askAiForBlock}
+                              onUnpin={() => unpinBlock(id)}
+                            />
+                          ),
+                        }}
+                      />
+                    </div>
                   )}
 
                   {reviewTab === 'matches' && (
