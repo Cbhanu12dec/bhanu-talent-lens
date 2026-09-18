@@ -187,6 +187,58 @@ console.log('\nPDF layout');
   check('every link rectangle is inside the page margins',
     annots.every(a => a.rect[0] >= marginL - 1 && a.rect[2] <= rightEdge + 1),
     annots.map(a => `${Math.round(a.rect[0])}-${Math.round(a.rect[2])}`).join(' '));
+
+  /* ------------------------------------------------- drawn rules and underlines */
+  // Read the stroked paths out of the page, not the source: a rule can be
+  // specified correctly and still never reach the paper.
+  const opList = await page.getOperatorList();
+  const segments = [];
+  for (let n = 0; n < opList.fnArray.length; n++) {
+    if (opList.fnArray[n] !== pdfjs.OPS.constructPath) continue;
+    const [ops, coords] = opList.argsArray[n];
+    let c = 0, cur = null;
+    for (const op of ops) {
+      if (op === pdfjs.OPS.moveTo) { cur = { x1: coords[c], y1: coords[c + 1] }; c += 2; }
+      else if (op === pdfjs.OPS.lineTo) {
+        if (cur) segments.push({ ...cur, x2: coords[c], y2: coords[c + 1] });
+        c += 2;
+      } else { c += op === pdfjs.OPS.curveTo ? 6 : 4; }
+    }
+  }
+  const horizontal = segments.filter(s => Math.abs(s.y1 - s.y2) < 0.6);
+  // PDF y grows upward; text item y is already in that space.
+  const sectionRules = horizontal.filter(s =>
+    Math.abs(Math.min(s.x1, s.x2) - marginL) < 1 && Math.abs(Math.max(s.x1, s.x2) - rightEdge) < 1);
+
+  check('a divider is drawn under every section heading',
+    sectionRules.length === RESUME.sections.length,
+    `${sectionRules.length} rules for ${RESUME.sections.length} sections`);
+  check('dividers span the full content width',
+    sectionRules.every(s => Math.abs(Math.abs(s.x2 - s.x1) - (rightEdge - marginL)) < 1),
+    sectionRules.map(s => Math.round(Math.abs(s.x2 - s.x1))).join(' '));
+  for (const h of ['PROFESSIONAL SUMMARY', 'TECHNICAL SKILLS', 'PROFESSIONAL EXPERIENCE']) {
+    const item = find(h);
+    const gap = LAYOUT.rule.gapAbovePt;
+    check(`"${h}" has its rule ${gap}pt below the baseline`,
+      item && sectionRules.some(s => Math.abs((item.y - s.y1) - gap) < 1.2),
+      item ? `baseline ${item.y}, rules ${sectionRules.map(s => Math.round(s.y1)).join(',')}` : 'heading missing');
+  }
+  check('a short heading still gets a full-width rule',
+    sectionRules.every(s => Math.abs(s.x2 - s.x1) > 400));
+
+  // Underlines are shorter strokes sitting just under the contact baseline.
+  const underlines = horizontal.filter(s =>
+    contactLine && s.y1 < contactLine.y && contactLine.y - s.y1 < 4);
+  check('every contact link is underlined', underlines.length >= annots.length,
+    `${underlines.length} underlines for ${annots.length} links`);
+  check('underlines stay within the contact line',
+    underlines.every(s => Math.min(s.x1, s.x2) >= contactLine.x - 1
+      && Math.max(s.x1, s.x2) <= contactLine.x + contactLine.width + 1),
+    underlines.map(s => `${Math.round(s.x1)}-${Math.round(s.x2)}`).join(' '));
+  check('nothing is underlined outside the contact line',
+    !horizontal.some(s => s.y1 < contactLine.y - 10 && Math.abs(s.x2 - s.x1) < 200
+      && !sectionRules.includes(s)),
+    horizontal.filter(s => s.y1 < contactLine.y - 10 && Math.abs(s.x2 - s.x1) < 200).length + ' stray strokes');
 }
 
 /* ------------------------------------------------------------------- DOCX */
@@ -208,7 +260,8 @@ console.log('\nDOCX layout');
   check('right margin matches the layout system', m.includes(`w:right="${inToTwips(LAYOUT.margin.right)}"`), m);
 
   check('name is 18pt', new RegExp(`<w:sz w:val="${ptToHalfPt(LAYOUT.size.name)}"`).test(xml));
-  check('heading is 11.5pt', new RegExp(`<w:sz w:val="${ptToHalfPt(LAYOUT.size.heading)}"`).test(xml));
+  // The heading size now lives in the shared style, not on each paragraph.
+  check('heading is 11.5pt', new RegExp(`<w:sz w:val="${ptToHalfPt(LAYOUT.size.heading)}"`).test(styles));
   check('job title is 10.5pt', new RegExp(`<w:sz w:val="${ptToHalfPt(LAYOUT.size.jobTitle)}"`).test(xml));
 
   const wantLeft = inToTwips(LAYOUT.bullet.textIndent);
@@ -220,8 +273,31 @@ console.log('\nDOCX layout');
   check('headings are uppercase', xml.includes('PROFESSIONAL EXPERIENCE'));
   check('right tab stop positions the date', /<w:tab w:val="right" w:pos="\d+"\/>/.test(xml), (xml.match(/<w:tabs>[\s\S]{0,120}/) || [''])[0]);
   check('no italics anywhere', !/<w:i\/>/.test(xml));
-  check('no section border rules', !/<w:pBdr>/.test(xml));
   check('links render black, not blue', !/1155CC/i.test(xml));
+
+  // Rule 3: the divider and the underline must come from shared styles, so
+  // they survive a section being renamed, reordered or added in Word.
+  const headingStyle = styles.match(/<w:style [^>]*w:styleId="SectionHeading"[\s\S]*?<\/w:style>/)?.[0] || '';
+  check('a shared section heading style exists', headingStyle.length > 0, styles.slice(0, 300));
+  check('the heading style carries a bottom border', /<w:pBdr>[\s\S]*?<w:bottom /.test(headingStyle), headingStyle);
+  check('the border is a real single rule', /<w:bottom w:val="single"/.test(headingStyle), headingStyle);
+  check('the border width matches the layout system',
+    new RegExp(`<w:bottom [^/]*w:sz="${Math.round(LAYOUT.rule.widthPt * 8)}"`).test(headingStyle), headingStyle);
+  check('no heading draws its border inline instead', !/<w:pBdr>/.test(xml), 'inline pBdr found in document body');
+
+  const headings = [...xml.matchAll(/<w:p\b[\s\S]*?<\/w:p>/g)].map(m => m[0])
+    .filter(p => /PROFESSIONAL SUMMARY|TECHNICAL SKILLS|PROFESSIONAL EXPERIENCE/.test(p));
+  check('every section heading uses the shared style', headings.length === 3
+    && headings.every(p => /w:pStyle w:val="SectionHeading"/.test(p)),
+    `${headings.length} headings`);
+
+  const linkStyle = styles.match(/<w:style [^>]*w:styleId="Hyperlink"[\s\S]*?<\/w:style>/)?.[0] || '';
+  check('a Hyperlink character style exists', linkStyle.length > 0, styles.slice(0, 300));
+  check('the Hyperlink style is underlined', /<w:u w:val="single"/.test(linkStyle), linkStyle);
+  check('every hyperlink run uses that style',
+    [...xml.matchAll(/<w:hyperlink [\s\S]*?<\/w:hyperlink>/g)]
+      .every(m => /w:rStyle w:val="Hyperlink"/.test(m[0])),
+    'a hyperlink run is missing the Hyperlink style');
   check('job headers keep with their bullets', /<w:keepNext\/>/.test(xml));
 
   const a4 = await buildResumeDocx(RESUME, 'Test', { pageSize: 'a4' });
@@ -242,7 +318,10 @@ console.log('\nDOCX layout');
 {
   console.log('\nPreview margins');
   const css = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
-  const rule = css.slice(css.indexOf('.doc,.doc-wrap > div{'));
+  // Anchor to the document-preview block; an older app-chrome rule earlier in
+  // the file also matches .doc and would give a false reading.
+  const docCss = css.slice(css.indexOf('RESUME DOCUMENT PREVIEW'));
+  const rule = docCss.slice(docCss.indexOf('.doc,.doc-wrap > div{'));
   const y = rule.match(/--doc-margin-y:\s*([\d.]+)in/)?.[1];
   const x = rule.match(/--doc-margin-x:\s*([\d.]+)in/)?.[1];
 
@@ -256,6 +335,24 @@ console.log('\nDOCX layout');
     /padding:\s*var\(--doc-margin-y\)\s+var\(--doc-margin-x\)/.test(rule));
   check('margins stay above the ATS clipping floor',
     Math.min(...Object.values(LAYOUT.margin)) >= 0.5, JSON.stringify(LAYOUT.margin));
+
+  const sect = docCss.slice(docCss.indexOf('.doc .sect{'), docCss.indexOf('}', docCss.indexOf('.doc .sect{')));
+  check('preview draws a divider under section headings', /border-bottom:\s*1px solid/.test(sect), sect);
+  check('divider colour matches the export', /#999/.test(sect), sect);
+  const padBottom = Number(sect.match(/padding:\s*0 0 ([\d.]+)px/)?.[1]);
+  check('the gap between heading and rule is 2-4px', padBottom >= 2 && padBottom <= 4, sect);
+  check('the divider comes from one shared heading rule',
+    (docCss.match(/\.doc .sect\{/g) || []).length === 1
+    && !/\.sect[^{]*\{[^}]*border-bottom:\s*none/.test(docCss),
+    'a later rule overrides the shared heading border');
+
+  const preview = readFileSync(new URL('../../src/components/ResumePreview.jsx', import.meta.url), 'utf8');
+  check('every section heading renders through that one class',
+    (preview.match(/className="sect"/g) || []).length === 1, preview.match(/className="sect"/g)?.length);
+
+  const link = docCss.slice(docCss.indexOf('.doc .contact-line a{'), docCss.indexOf('}', docCss.indexOf('.doc .contact-line a{')));
+  check('preview links are underlined at rest', /text-decoration:\s*underline/.test(link), link);
+  check('preview links are not colour-only', /color:#000/.test(link), link);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

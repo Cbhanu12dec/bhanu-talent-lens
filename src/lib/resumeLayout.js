@@ -56,7 +56,16 @@ export const LAYOUT = {
   color: {
     text: '#000000',
     // Links stay black: colour must never be load-bearing on an ATS document.
+    // The underline, not the colour, is what marks them as links.
     link: '#000000',
+    rule: '#999999',
+  },
+  // Divider under every section heading. Applied from the shared heading style
+  // in all three renderers, so a new or renamed section inherits it.
+  // space.afterHeading is measured from the rule, not the text.
+  rule: {
+    widthPt: 0.75,
+    gapAbovePt: 3,   // heading baseline to rule
   },
   separator: ' | ',
   maxNamePt: 20,

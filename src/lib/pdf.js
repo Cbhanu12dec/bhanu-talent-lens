@@ -3,6 +3,11 @@ import { splitContact } from './contactLinks.js';
 import { LAYOUT, inToPt, leading, formatDateRange, formatHeading } from './resumeLayout.js';
 
 const BLACK = [0, 0, 0];
+const RULE_RGB = [
+  parseInt(LAYOUT.color.rule.slice(1, 3), 16),
+  parseInt(LAYOUT.color.rule.slice(3, 5), 16),
+  parseInt(LAYOUT.color.rule.slice(5, 7), 16),
+];
 const F = LAYOUT.font.pdf;
 const S = LAYOUT.size;
 const SP = LAYOUT.space;
@@ -51,6 +56,27 @@ export function buildResumePdf(resume, title = 'Resume', opts = {}) {
   }
   const set = (style, size) => { doc.setFont(F, style); doc.setFontSize(size); doc.setTextColor(...BLACK); };
 
+  // Every section heading goes through here, so a renamed or newly added
+  // section cannot end up without its divider.
+  function sectionHeading(text, gapBefore) {
+    set('bold', S.heading);
+    const baseline = lineBox(S.heading, gapBefore);
+    doc.text(formatHeading(text), marginX, baseline);
+    const ruleY = baseline + LAYOUT.rule.gapAbovePt;
+    doc.setDrawColor(...RULE_RGB);
+    doc.setLineWidth(LAYOUT.rule.widthPt);
+    doc.line(marginX, ruleY, rightEdge, ruleY);
+    y = Math.max(y, ruleY);
+  }
+
+  /** Underline marks a link without relying on colour. */
+  function underline(x, baseline, width, size) {
+    const thickness = Math.max(size * 0.05, 0.4);
+    doc.setDrawColor(...BLACK);
+    doc.setLineWidth(thickness);
+    doc.line(x, baseline + size * 0.12, x + width, baseline + size * 0.12);
+  }
+
   /* --------------------------------------------------------------- name */
   set('bold', S.name);
   doc.text(resume.name || '', pageWidth / 2, lineBox(S.name), { align: 'center' });
@@ -68,9 +94,12 @@ export function buildResumePdf(resume, title = 'Resume', opts = {}) {
       if (i) { doc.text(sep, x, baseline); x += sepW; }
       const w = doc.getTextWidth(p.text);
       doc.text(p.text, x, baseline);
-      // Clickable but not coloured or underlined: on an ATS document colour
-      // must never be the thing carrying the meaning.
-      if (p.href) doc.link(x, baseline - S.contact, w, S.contact + 3, { url: p.href });
+      // Black but underlined: colour must never be the only thing marking a
+      // link, and the underline is what carries that meaning here.
+      if (p.href) {
+        underline(x, baseline, w, S.contact);
+        doc.link(x, baseline - S.contact, w, S.contact + 3, { url: p.href });
+      }
       x += w;
     });
     y += SP.afterContact;
@@ -81,8 +110,7 @@ export function buildResumePdf(resume, title = 'Resume', opts = {}) {
     // Keep a heading with at least its first line of content.
     ensureSpace(S.heading * LAYOUT.lineHeight + SP.afterHeading + bodyLead * 2);
 
-    set('bold', S.heading);
-    doc.text(formatHeading(section.heading), marginX, lineBox(S.heading, sIdx > 0 ? SP.beforeHeading : 0));
+    sectionHeading(section.heading, sIdx > 0 ? SP.beforeHeading : 0);
     y += SP.afterHeading;
 
     /* paragraphs */

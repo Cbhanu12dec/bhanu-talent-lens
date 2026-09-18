@@ -2415,14 +2415,15 @@ label.srow-title{cursor:pointer;}
 }
 .doc h4{font-size:24px;font-weight:700;text-align:center;margin:0 0 4px;color:#000;letter-spacing:0;}
 .doc .contact-line{text-align:center;font-size:12.7px;color:#000;margin:0 0 12px;}
-/* Black and unstyled at rest so the preview matches the downloaded file,
-   where colour must never be the thing carrying meaning. The underline
-   appears on hover/focus purely to show the link is clickable here. */
-.doc .contact-line a{color:#000;text-decoration:none;cursor:pointer;}
-.doc .contact-line a:hover,.doc .contact-line a:focus-visible{text-decoration:underline;}
+/* Underlined, never colour-only, so a link is identifiable in print too. */
+.doc .contact-line a{color:#000;text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
+.doc .contact-line a:hover,.doc .contact-line a:focus-visible{text-decoration-thickness:2px;}
+/* The divider is on the shared heading style, so any section added or renamed
+   later inherits it. Must match LAYOUT.rule in resumeLayout.js. */
 .doc .sect{
   font-size:15.3px;font-weight:700;text-transform:uppercase;color:#000;
-  letter-spacing:.02em;margin:14.7px 0 6.7px;padding:0;border:none;
+  letter-spacing:.02em;margin:14.7px 0 6.7px;padding:0 0 3px;
+  border:none;border-bottom:1px solid #999;
 }
 .doc p{font-size:13.3px;color:#000;line-height:1.28;margin:0 0 5px;}
 .doc p strong{font-weight:700;color:#000;}

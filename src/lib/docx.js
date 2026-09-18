@@ -1,6 +1,6 @@
 import {
   Document, Packer, Paragraph, TextRun, AlignmentType,
-  TabStopType, ExternalHyperlink, Tab
+  TabStopType, ExternalHyperlink, Tab, BorderStyle, UnderlineType
 } from 'docx';
 import { splitContact } from './contactLinks.js';
 import {
@@ -21,6 +21,11 @@ const MARGIN = {
   right: inToTwips(LAYOUT.margin.right),
 };
 const pageWidthTwips = pageSize => (pageSize === 'a4' ? 11906 : 12240);
+
+// Word border widths are eighths of a point.
+const RULE_EIGHTHS = Math.round(LAYOUT.rule.widthPt * 8);
+const HEADING_STYLE = 'SectionHeading';
+const LINK_STYLE = 'Hyperlink';
 
 function sanitizeFilename(name) {
   return name.replace(/[^a-z0-9\-_]+/gi, '_').replace(/_{2,}/g, '_').replace(/^_+|_+$/g, '') || 'resume';
@@ -107,11 +112,11 @@ export async function buildResumeDocx(resume, title = 'Resume', opts = {}) {
     parts.forEach((p, i) => {
       if (i) runs.push(new TextRun({ text: LAYOUT.separator, size: ptToHalfPt(S.contact) }));
       if (p.href) {
-        // Clickable but rendered black and unstyled: colour must not be the
-        // thing carrying meaning on an ATS document.
+        // Black but underlined via the built-in Hyperlink character style, so
+        // the link survives edits and colour is not carrying the meaning.
         runs.push(new ExternalHyperlink({
           link: p.href,
-          children: [new TextRun({ text: p.text, size: ptToHalfPt(S.contact), color: BLACK })],
+          children: [new TextRun({ text: p.text, size: ptToHalfPt(S.contact), style: LINK_STYLE })],
         }));
       } else {
         runs.push(new TextRun({ text: p.text, size: ptToHalfPt(S.contact) }));
@@ -125,10 +130,11 @@ export async function buildResumeDocx(resume, title = 'Resume', opts = {}) {
   }
 
   (resume.sections || []).forEach(section => {
+    // The divider and spacing live in the style, not here, so every section
+    // keeps them through later edits in Word.
     children.push(new Paragraph({
-      spacing: { ...SPACING, before: ptToDxa(SP.beforeHeading), after: ptToDxa(SP.afterHeading) },
-      keepNext: true,
-      children: [new TextRun({ text: formatHeading(section.heading), bold: true, size: ptToHalfPt(S.heading) })]
+      style: HEADING_STYLE,
+      children: [new TextRun({ text: formatHeading(section.heading) })]
     }));
     (section.paragraphs || []).forEach(p => children.push(paragraphForText(p)));
     (section.entries || []).forEach(entry => children.push(...paragraphsForEntry(entry, contentWidthTwips)));
@@ -150,6 +156,32 @@ export async function buildResumeDocx(resume, title = 'Resume', opts = {}) {
           paragraph: { spacing: SPACING },
         },
       },
+      paragraphStyles: [{
+        id: HEADING_STYLE,
+        name: 'Section Heading',
+        basedOn: 'Normal',
+        next: 'Normal',
+        quickFormat: true,
+        run: { bold: true, size: ptToHalfPt(S.heading), color: BLACK },
+        paragraph: {
+          spacing: { ...SPACING, before: ptToDxa(SP.beforeHeading), after: ptToDxa(SP.afterHeading) },
+          keepNext: true,
+          border: {
+            bottom: {
+              style: BorderStyle.SINGLE,
+              size: RULE_EIGHTHS,
+              color: LAYOUT.color.rule.replace('#', ''),
+              space: LAYOUT.rule.gapAbovePt,
+            },
+          },
+        },
+      }],
+      characterStyles: [{
+        id: LINK_STYLE,
+        name: 'Hyperlink',
+        basedOn: 'DefaultParagraphFont',
+        run: { underline: { type: UnderlineType.SINGLE }, color: LAYOUT.color.link.replace('#', '') },
+      }],
     },
     sections: [{ properties: { page: { margin: MARGIN, size } }, children }],
   });
